@@ -1,30 +1,55 @@
 #include "QskGestureRecognizer.h"
+#include "QskEvent.h"
+#include "QskQuick.h"
 
-#include <QQuickWindow>
-#include <QQuickItem>
-#include <QCoreApplication>
-#include <QBasicTimer>
-#include <QScopedPointer>
-#include <QMouseEvent>
+#include <qbasictimer.h>
+#include <qcoreapplication.h>
+#include <qcoreevent.h>
+#include <qquickitem.h>
+#include <qquickwindow.h>
+#include <qscopedpointer.h>
+#include <qvector.h>
 
 QSK_QT_PRIVATE_BEGIN
 #include <private/qquickwindow_p.h>
 QSK_QT_PRIVATE_END
 
+static QMouseEvent* qskClonedMouseEventAt(
+    const QMouseEvent* event, QPointF* localPos )
+{
+#if QT_VERSION < QT_VERSION_CHECK( 6, 0, 0 )
+
+    auto clonedEvent = QQuickWindowPrivate::cloneMouseEvent(
+        const_cast< QMouseEvent* >( event ), localPos );
+
+#else
+    auto clonedEvent = event->clone();
+
+    auto& point = QMutableEventPoint::from( clonedEvent->point( 0 ) );
+    point.detach();
+    point.setTimestamp( event->timestamp() );
+
+    if ( localPos )
+        point.setPosition( *localPos );
+#endif
+
+    return clonedEvent;
+}
+
 static inline QMouseEvent* qskClonedMouseEvent(
     const QMouseEvent* mouseEvent, const QQuickItem* item = nullptr )
 {
     QMouseEvent* clonedEvent;
-    QMouseEvent* event = const_cast< QMouseEvent* >( mouseEvent );
+    auto event = const_cast< QMouseEvent* >( mouseEvent );
 
     if ( item )
     {
-        QPointF localPos = item->mapFromScene( event->windowPos() );
-        clonedEvent = QQuickWindowPrivate::cloneMouseEvent( event, &localPos );
+        auto localPos = item->mapFromScene( qskMouseScenePosition( event ) );
+        clonedEvent = qskClonedMouseEventAt( event, &localPos );
     }
     else
     {
-        clonedEvent = QQuickWindowPrivate::cloneMouseEvent( event, nullptr );
+        clonedEvent = qskClonedMouseEventAt( event, nullptr );
     }
 
     clonedEvent->setAccepted( false );
@@ -33,80 +58,143 @@ static inline QMouseEvent* qskClonedMouseEvent(
 
 namespace
 {
-    // again we try to avoid creating unnecessary QObjects by
-    // using the same timer Object for all gesture recognizers
+    /*
+        As we don't want QskGestureRecognizer being a QObject
+        we need some extra timers - usually one per screen.
+     */
 
     class Timer final : public QObject
     {
-    public:
-        static Timer* instance()
-        {
-            // ther should be only one mouse being pressed at the same time
-            static Timer timer;
-            return &timer;
-        }
-
+      public:
         void start( int ms, QskGestureRecognizer* recognizer )
         {
-            if ( m_recognizer && m_recognizer != recognizer )
-            {
-                qWarning() << "QskGestureRecognizer: running more than one recognizer at the same time";
-                m_recognizer->reject(); // should never happen
-            }
+            if ( m_timer.isActive() )
+                qWarning() << "QskGestureRecognizer: resetting an active timer";
 
             m_recognizer = recognizer;
             m_timer.start( ms, this );
         }
 
-        void stop( const QskGestureRecognizer* recognizer )
+        void stop()
         {
-            if ( recognizer == m_recognizer )
-            {
-                m_timer.stop();
-                m_recognizer = nullptr;
-            }
+            m_timer.stop();
+            m_recognizer = nullptr;
         }
 
-    protected:
-        virtual void timerEvent( QTimerEvent* ) override final
+        const QskGestureRecognizer* recognizer() const
+        {
+            return m_recognizer;
+        }
+
+      protected:
+        void timerEvent( QTimerEvent* ) override
         {
             m_timer.stop();
 
             if ( m_recognizer )
             {
-                m_recognizer->reject();
+                auto recognizer = m_recognizer;
                 m_recognizer = nullptr;
+
+                recognizer->reject();
             }
         }
 
         QBasicTimer m_timer;
-        QskGestureRecognizer* m_recognizer;
+        QskGestureRecognizer* m_recognizer = nullptr;
+    };
+
+    class TimerTable
+    {
+      public:
+        ~TimerTable()
+        {
+            qDeleteAll( m_table );
+        }
+
+        void startTimer( int ms, QskGestureRecognizer* recognizer )
+        {
+            Timer* timer = nullptr;
+
+            for ( auto t : qskAsConst( m_table ) )
+            {
+                if ( t->recognizer() == nullptr ||
+                    t->recognizer() == recognizer )
+                {
+                    timer = t;
+                    break;
+                }
+            }
+
+            if ( timer == nullptr )
+            {
+                timer = new Timer();
+                m_table += timer;
+            }
+
+            timer->start( ms, recognizer );
+        }
+
+        void stopTimer( const QskGestureRecognizer* recognizer )
+        {
+            for ( auto timer : qskAsConst( m_table ) )
+            {
+                if ( timer->recognizer() == recognizer )
+                {
+                    // we keep the timer to be used later again
+                    timer->stop();
+                    return;
+                }
+            }
+        }
+
+      private:
+        /*
+            Usually we have not more than one entry.
+            Only when having more than one screen we
+            might have mouse events to be processed
+            simultaneously.
+         */
+        QVector< Timer* > m_table;
+    };
+
+    class PendingEvents : public QVector< QMouseEvent* >
+    {
+      public:
+        ~PendingEvents()
+        {
+            qDeleteAll( *this );
+        }
+
+        void reset()
+        {
+            qDeleteAll( *this );
+            clear();
+        }
     };
 }
 
+Q_GLOBAL_STATIC( TimerTable, qskTimerTable )
+
 class QskGestureRecognizer::PrivateData
 {
-public:
-    PrivateData():
-        watchedItem( nullptr ),
-        pendingPress( nullptr ),
-        timestamp( 0 ),
-        timeout( -1 ),
-        buttons( Qt::NoButton ),
-        state( QskGestureRecognizer::Idle ),
-        isReplayingEvents( false )
+  public:
+    PrivateData()
+        : watchedItem( nullptr )
+        , timestamp( 0 )
+        , timestampProcessed( 0 )
+        , timeout( -1 )
+        , buttons( Qt::NoButton )
+        , state( QskGestureRecognizer::Idle )
+        , isReplayingEvents( false )
     {
-    }
-
-    ~PrivateData()
-    {
-        delete pendingPress;
     }
 
     QQuickItem* watchedItem;
 
-    QMouseEvent* pendingPress;
+    PendingEvents pendingEvents;
     ulong timestamp;
+    ulong timestampProcessed;
 
     int timeout; // ms
 
@@ -116,18 +204,21 @@ public:
     bool isReplayingEvents : 1; // not exception safe !!!
 };
 
-QskGestureRecognizer::QskGestureRecognizer():
-    m_data( new PrivateData() )
+QskGestureRecognizer::QskGestureRecognizer()
+    : m_data( new PrivateData() )
 {
 }
 
 QskGestureRecognizer::~QskGestureRecognizer()
 {
-    Timer::instance()->stop( this );
+    qskTimerTable->stopTimer( this );
 }
 
 void QskGestureRecognizer::setWatchedItem( QQuickItem* item )
 {
+    if ( m_data->watchedItem )
+        reset();
+
     m_data->watchedItem = item;
 }
 
@@ -161,6 +252,16 @@ ulong QskGestureRecognizer::timestamp() const
     return m_data->timestamp;
 }
 
+bool QskGestureRecognizer::hasProcessedBefore( const QMouseEvent* event ) const
+{
+    return event && ( event->timestamp() <= m_data->timestampProcessed );
+}
+
+bool QskGestureRecognizer::isReplaying() const
+{
+    return m_data->isReplayingEvents;
+}
+
 void QskGestureRecognizer::setState( State state )
 {
     if ( state != m_data->state )
@@ -177,9 +278,10 @@ QskGestureRecognizer::State QskGestureRecognizer::state() const
     return static_cast< QskGestureRecognizer::State >( m_data->state );
 }
 
-bool QskGestureRecognizer::processEvent( QQuickItem* item, QEvent* event )
+bool QskGestureRecognizer::processEvent(
+    QQuickItem* item, QEvent* event, bool blockReplayedEvents )
 {
-    if ( m_data->isReplayingEvents )
+    if ( m_data->isReplayingEvents && blockReplayedEvents )
     {
         /*
             This one is a replayed event after we had decided
@@ -190,8 +292,8 @@ bool QskGestureRecognizer::processEvent( QQuickItem* item, QEvent* event )
 
     auto& watchedItem = m_data->watchedItem;
 
-    if ( watchedItem == nullptr || !watchedItem->isEnabled()
-         || !watchedItem->isVisible() || watchedItem->window() == nullptr )
+    if ( watchedItem == nullptr || !watchedItem->isEnabled() ||
+        !watchedItem->isVisible() || watchedItem->window() == nullptr )
     {
         reset();
         return false;
@@ -205,21 +307,8 @@ bool QskGestureRecognizer::processEvent( QQuickItem* item, QEvent* event )
         {
             // should not happen, when using the recognizer correctly
             qWarning() << "QskGestureRecognizer: pressed, while not being idle";
+            abort();
             return false;
-        }
-
-        auto mouseGrabber = watchedItem->window()->mouseGrabberItem();
-        if ( mouseGrabber && ( mouseGrabber != watchedItem ) )
-        {
-            if ( mouseGrabber->keepMouseGrab() || mouseGrabber->keepTouchGrab() )
-            {
-                /*
-                    Another child has grabbed mouse/touch and is not willing to
-                    be intercepted: we respect this.
-                 */
-
-                return false;
-            }
         }
 
         Qt::MouseButtons buttons = m_data->buttons;
@@ -231,11 +320,11 @@ bool QskGestureRecognizer::processEvent( QQuickItem* item, QEvent* event )
             return false;
 
         /*
-            We grab the mouse for watchedItem and indicate, that we want
-            to keep it. From now on all mouse events should end up at watchedItem.
+            We try to grab the mouse for watchedItem and indicate, that we want
+            to keep it. Then all mouse events should end up at watchedItem.
          */
-        watchedItem->grabMouse();
-        watchedItem->setKeepMouseGrab( true );
+        if ( !qskGrabMouse( watchedItem ) )
+            return false;
 
         m_data->timestamp = mouseEvent->timestamp();
 
@@ -261,10 +350,8 @@ bool QskGestureRecognizer::processEvent( QQuickItem* item, QEvent* event )
                 out, that we don't want to handle the mouse event sequence,
              */
 
-            m_data->pendingPress = qskClonedMouseEvent( mouseEvent );
-
             if ( m_data->timeout > 0 )
-                Timer::instance()->start( m_data->timeout, this );
+                qskTimerTable->startTimer( m_data->timeout, this );
 
             setState( Pending );
         }
@@ -276,46 +363,34 @@ bool QskGestureRecognizer::processEvent( QQuickItem* item, QEvent* event )
 
     if ( ( item == watchedItem ) && ( m_data->state > Idle ) )
     {
-        switch( event->type() )
+        switch ( event->type() )
         {
             case QEvent::MouseButtonPress:
             {
-                pressEvent( static_cast< QMouseEvent* >( event ) );
+                auto mouseEvent = static_cast< QMouseEvent* >( event );
+                m_data->pendingEvents += qskClonedMouseEvent( mouseEvent );
+
+                pressEvent( mouseEvent );
                 return true;
             }
 
             case QEvent::MouseMove:
             {
-                moveEvent( static_cast< QMouseEvent* >( event ) );
+                auto mouseEvent = static_cast< QMouseEvent* >( event );
+                m_data->pendingEvents += qskClonedMouseEvent( mouseEvent );
+
+                moveEvent( mouseEvent );
                 return true;
             }
 
             case QEvent::MouseButtonRelease:
             {
                 auto mouseEvent = static_cast< QMouseEvent* >( event );
+                m_data->pendingEvents += qskClonedMouseEvent( mouseEvent );
 
                 if ( m_data->state == Pending )
                 {
-                    reject(); // sending the pending press
-
-                    auto mouseGrabber = watchedItem->window()->mouseGrabberItem();
-                    if ( mouseGrabber && ( mouseGrabber != watchedItem ) )
-                    {
-                        /*
-                            After resending the initial press someone else
-                            might be interested in this sequence. Then we
-                            also have to resend the release event, being translated
-                            into the coordinate system of the new grabber.
-                         */
-
-                        QScopedPointer< QMouseEvent > clonedRelease(
-                            qskClonedMouseEvent( mouseEvent, mouseGrabber ) );
-
-                        m_data->isReplayingEvents = true;
-                        QCoreApplication::sendEvent(
-                            watchedItem->window(), clonedRelease.data() );
-                        m_data->isReplayingEvents = false;
-                    }
+                    reject();
                 }
                 else
                 {
@@ -360,31 +435,49 @@ void QskGestureRecognizer::stateChanged( State from, State to )
 
 void QskGestureRecognizer::accept()
 {
-    Timer::instance()->stop( this );
-
-    delete m_data->pendingPress;
-    m_data->pendingPress = nullptr;
+    qskTimerTable->stopTimer( this );
+    m_data->pendingEvents.reset();
 
     setState( Accepted );
 }
 
 void QskGestureRecognizer::reject()
 {
-    QScopedPointer< QMouseEvent > mousePress( m_data->pendingPress );
-    m_data->pendingPress = nullptr;
+    const auto events = m_data->pendingEvents;
+    m_data->pendingEvents.clear();
 
     reset();
 
-    if ( mousePress.data() )
-    {
-        const auto window = m_data->watchedItem->window();
-        if ( window->mouseGrabberItem() == m_data->watchedItem )
-            m_data->watchedItem->ungrabMouse();
+    auto watchedItem = m_data->watchedItem;
+    if ( watchedItem == nullptr )
+        return;
 
-        m_data->isReplayingEvents = true;
-        QCoreApplication::sendEvent( window, mousePress.data() );
-        m_data->isReplayingEvents = false;
+    const auto window = watchedItem->window();
+    if ( window == nullptr )
+        return;
+
+    m_data->isReplayingEvents = true;
+
+    qskUngrabMouse( watchedItem );
+
+    if ( !events.isEmpty() &&
+        ( events[ 0 ]->type() == QEvent::MouseButtonPress ) )
+    {
+        /*
+            In a situation of several recognizers ( f.e a vertical
+            scroll view inside a horizontal swipe view ), we might receive
+            cloned events from another recognizer.
+            To avoid to process them twice we store the most recent timestamp
+            of the cloned events we have already processed, but reposted.
+         */
+
+        m_data->timestampProcessed = events.last()->timestamp();
+
+        for ( auto event : events )
+            QCoreApplication::sendEvent( window, event );
     }
+
+    m_data->isReplayingEvents = false;
 }
 
 void QskGestureRecognizer::abort()
@@ -394,11 +487,11 @@ void QskGestureRecognizer::abort()
 
 void QskGestureRecognizer::reset()
 {
-    Timer::instance()->stop( this );
-    m_data->watchedItem->setKeepMouseGrab( false );
+    qskTimerTable->stopTimer( this );
 
-    delete m_data->pendingPress;
-    m_data->pendingPress = nullptr;
+    qskUngrabMouse( m_data->watchedItem );
+
+    m_data->pendingEvents.reset();
     m_data->timestamp = 0;
 
     setState( Idle );

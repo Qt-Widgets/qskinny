@@ -7,40 +7,33 @@
 #define QSK_BOX_NODE_H
 
 #include "QskGlobal.h"
-#include "QskBorderGeometry.h"
+#include <qsgnode.h>
 
-#define VM_SUPPORT 1
-
-#if VM_SUPPORT
-#include "QskBoxMaterialVM.h"
-#else
-#include "QskBoxMaterial.h"
-#endif
-
-#include <QSGGeometryNode>
+class QskBoxShapeMetrics;
+class QskBoxBorderMetrics;
+class QskBoxBorderColors;
+class QskGradient;
 
 class QSK_EXPORT QskBoxNode : public QSGGeometryNode
 {
-public:
+  public:
     QskBoxNode();
-    virtual ~QskBoxNode();
+    ~QskBoxNode() override;
 
-    void setBoxData( const QRectF&, const QskBoxOptions& );
+    void setBoxData( const QRectF&,
+        const QskBoxShapeMetrics&, const QskBoxBorderMetrics&,
+        const QskBoxBorderColors&, const QskGradient& );
 
-    QRectF rect() const;
+    void setBoxData( const QRectF& rect, const QskGradient& );
 
-private:
+  private:
+    void setMonochrome( bool on );
+
     uint m_metricsHash;
     uint m_colorsHash;
-
     QRectF m_rect;
 
-#if VM_SUPPORT
-    QskBoxMaterialVM m_material;
-#else
-    QskBoxMaterial m_material;
-#endif
-    QskBorderGeometry m_geometry;
+    QSGGeometry m_geometry;
 };
 
 #endif

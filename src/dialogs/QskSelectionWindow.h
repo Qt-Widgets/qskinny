@@ -6,14 +6,19 @@
 #ifndef QSK_SELECTION_WINDOW_H
 #define QSK_SELECTION_WINDOW_H 1
 
-#include "QskGlobal.h"
-#include "QskInputWindow.h"
+#include "QskDialogWindow.h"
 
-class QskSelectionDialogBox;
+class QskTextOptions;
 
-class QSK_EXPORT QskSelectionWindow : public QskInputWindow
+class QSK_EXPORT QskSelectionWindow : public QskDialogWindow
 {
     Q_OBJECT
+
+    Q_PROPERTY( QString infoText READ infoText
+        WRITE setInfoText NOTIFY infoTextChanged )
+
+    Q_PROPERTY( QskTextOptions infoTextOptions READ infoTextOptions
+        WRITE setInfoTextOptions NOTIFY infoTextOptionsChanged )
 
     Q_PROPERTY( QStringList entries READ entries
         WRITE setEntries NOTIFY entriesChanged FINAL )
@@ -21,24 +26,36 @@ class QSK_EXPORT QskSelectionWindow : public QskInputWindow
     Q_PROPERTY( int selectedRow READ selectedRow
         WRITE setSelectedRow NOTIFY selectedRowChanged FINAL )
 
-    using Inherited = QskInputWindow;
+    using Inherited = QskDialogWindow;
 
-public:
+  public:
     QskSelectionWindow( QWindow* parent = nullptr );
-    virtual ~QskSelectionWindow();
+    ~QskSelectionWindow() override;
+
+    void setInfoTextOptions( const QskTextOptions& );
+    QskTextOptions infoTextOptions() const;
+
+    QString infoText() const;
 
     Q_INVOKABLE QStringList entries() const;
     Q_INVOKABLE int selectedRow() const;
     Q_INVOKABLE QString selectedEntry() const;
 
-public Q_SLOTS:
+  public Q_SLOTS:
+    void setInfoText( const QString& );
     void setEntries( const QStringList& );
     void setSelectedRow( int row );
 
-Q_SIGNALS:
+  Q_SIGNALS:
+    void infoTextChanged( const QString& );
+    void infoTextOptionsChanged( const QskTextOptions& );
     void selectedRowChanged( int );
     void selectedEntryChanged( const QString& );
     void entriesChanged();
+
+  private:
+    class PrivateData;
+    std::unique_ptr< PrivateData > m_data;
 };
 
 #endif

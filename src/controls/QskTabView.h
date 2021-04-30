@@ -7,6 +7,7 @@
 #define QSK_TAB_VIEW_H
 
 #include "QskControl.h"
+#include "QskNamespace.h"
 
 class QskTabBar;
 class QskTabButton;
@@ -15,26 +16,40 @@ class QSK_EXPORT QskTabView : public QskControl
 {
     Q_OBJECT
 
-    Q_PROPERTY( Qt::Orientation orientation READ orientation
-        WRITE setOrientation NOTIFY orientationChanged )
+    Q_PROPERTY( QskTabBar* tabBar READ tabBar )
+
+    Q_PROPERTY( Qsk::Position tabPosition READ tabPosition
+        WRITE setTabPosition NOTIFY tabPositionChanged FINAL )
+
+    Q_PROPERTY( bool autoFitTabs READ autoFitTabs
+        WRITE setAutoFitTabs NOTIFY autoFitTabsChanged FINAL )
+
+    Q_PROPERTY( Qt::Orientation orientation READ orientation )
 
     Q_PROPERTY( int count READ count NOTIFY countChanged FINAL )
+
     Q_PROPERTY( int currentIndex READ currentIndex
         WRITE setCurrentIndex NOTIFY currentIndexChanged FINAL )
 
     typedef QskControl Inherited;
 
-public:
+  public:
     QSK_SUBCONTROLS( TabBar, Page )
 
     QskTabView( QQuickItem* parent = nullptr );
-    QskTabView( Qt::Orientation, QQuickItem* parent = nullptr );
+    QskTabView( Qsk::Position tabPosition, QQuickItem* parent = nullptr );
 
-    virtual ~QskTabView();
+    ~QskTabView() override;
 
     const QskTabBar* tabBar() const;
+    QskTabBar* tabBar();
 
-    void setOrientation( Qt::Orientation );
+    void setTabPosition( Qsk::Position );
+    Qsk::Position tabPosition() const;
+
+    void setAutoFitTabs( bool );
+    bool autoFitTabs() const;
+
     Qt::Orientation orientation() const;
 
     int addTab( QskTabButton*, QQuickItem* );
@@ -44,13 +59,13 @@ public:
     int insertTab( int index, const QString&, QQuickItem* );
 
     void removeTab( int index );
-    void clear();
+    void clear( bool autoDelete = false );
 
     QQuickItem* itemAt( int index ) const;
     QskTabButton* buttonAt( int index ) const;
 
-    int itemIndex( QQuickItem* );
-    int buttonIndex( QskTabButton* );
+    int itemIndex( const QQuickItem* );
+    int buttonIndex( const QskTabButton* );
 
     QQuickItem* currentItem() const;
     QskTabButton* currentButton() const;
@@ -60,21 +75,24 @@ public:
 
     QRectF tabRect() const;
 
-    virtual QSizeF contentsSizeHint() const override;
+    QskAspect::Placement effectivePlacement() const override;
 
-public Q_SLOTS:
+  public Q_SLOTS:
     void setCurrentIndex( int index );
 
-Q_SIGNALS:
+  Q_SIGNALS:
     void currentIndexChanged( int index );
-    void countChanged();
-    void orientationChanged();
+    void countChanged( int );
+    void tabPositionChanged( Qsk::Position );
+    void autoFitTabsChanged( bool );
 
-protected:
-    virtual bool event( QEvent* event ) override;
-    virtual void updateLayout() override;
+  protected:
+    bool event( QEvent* event ) override;
+    void updateLayout() override;
 
-private:
+    QSizeF layoutSizeHint( Qt::SizeHint, const QSizeF& ) const override;
+
+  private:
     class PrivateData;
     std::unique_ptr< PrivateData > m_data;
 };

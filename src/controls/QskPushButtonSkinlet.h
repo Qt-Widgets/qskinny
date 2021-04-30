@@ -6,7 +6,6 @@
 #ifndef QSK_PUSH_BUTTON_SKINLET_H
 #define QSK_PUSH_BUTTON_SKINLET_H
 
-#include "QskGlobal.h"
 #include "QskSkinlet.h"
 
 class QskPushButton;
@@ -17,35 +16,32 @@ class QSK_EXPORT QskPushButtonSkinlet : public QskSkinlet
 
     using Inherited = QskSkinlet;
 
-public:
+  public:
     enum NodeRole
     {
-        ButtonRole,
+        PanelRole,
         TextRole,
         GraphicRole
     };
 
     Q_INVOKABLE QskPushButtonSkinlet( QskSkin* = nullptr );
-    virtual ~QskPushButtonSkinlet();
+    ~QskPushButtonSkinlet() override;
 
-    virtual QRectF subControlRect(
-        const QskSkinnable*, QskAspect::Subcontrol ) const override;
+    QRectF subControlRect( const QskSkinnable*,
+        const QRectF&, QskAspect::Subcontrol ) const override;
 
-    virtual qreal buttonShift( const QskPushButton* ) const;
+    QSizeF sizeHint( const QskSkinnable*,
+        Qt::SizeHint, const QSizeF& ) const override;
 
-protected:
-    virtual QSGNode* updateSubNode( const QskSkinnable*,
+  protected:
+    QSGNode* updateSubNode( const QskSkinnable*,
         quint8 nodeRole, QSGNode* ) const override;
 
-private:
-    QRectF panelRect( const QskPushButton* ) const;
-    QRectF textRect( const QskPushButton* ) const;
-    QRectF graphicRect( const QskPushButton* ) const;
+  private:
+    QRectF textRect( const QskPushButton*, const QRectF& ) const;
+    QRectF graphicRect( const QskPushButton*, const QRectF& ) const;
 
-    QSGNode* updateButtonNode( const QskPushButton*, QSGNode* ) const;
     QSGNode* updateTextNode( const QskPushButton*, QSGNode* ) const;
-    QSGNode* updateGraphicNode( const QskPushButton*, QSGNode* ) const;
 };
 
 #endif
-

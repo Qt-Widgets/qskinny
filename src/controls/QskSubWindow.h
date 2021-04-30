@@ -6,70 +6,101 @@
 #ifndef QSK_SUB_WINDOW_H
 #define QSK_SUB_WINDOW_H 1
 
-#include "QskGlobal.h"
 #include "QskPopup.h"
+
+class QskGraphic;
+class QskTextOptions;
+class QUrl;
 
 class QSK_EXPORT QskSubWindow : public QskPopup
 {
     Q_OBJECT
 
-    Q_PROPERTY( bool decorated READ isDecorated
-        WRITE setDecorated NOTIFY decoratedChanged )
+    Q_PROPERTY( Decorations decorations READ decorations
+        WRITE setDecorations RESET resetDecorations NOTIFY decorationsChanged )
 
-    Q_PROPERTY( QString title READ title WRITE setTitle NOTIFY titleChanged )
-    Q_PROPERTY( WindowButtons windowButtons READ windowButtons
-        WRITE setWindowButtons NOTIFY windowButtonsChanged )
+    Q_PROPERTY( QString windowTitle READ windowTitle
+        WRITE setWindowTitle NOTIFY windowTitleChanged )
+
+    Q_PROPERTY( QskTextOptions windowTitleTextOptions READ windowTitleTextOptions
+        WRITE setWindowTitleTextOptions NOTIFY windowTitleTextOptionsChanged )
+
+    Q_PROPERTY( QUrl windowIconSource READ windowIconSource
+        WRITE setWindowIconSource NOTIFY windowIconSourceChanged )
+
+    Q_PROPERTY( QskGraphic windowIcon READ windowIcon
+        WRITE setWindowIcon NOTIFY windowIconChanged FINAL )
 
     using Inherited = QskPopup;
 
-public:
-    enum WindowButton
+  public:
+    enum Decoration
     {
-        MinimizeButton = 0x1,
-        MaximizeButton = 0x2,
-        CloseButton = 0x4
+        NoDecoration   = 0,
+
+        TitleBar       = 1 << 0,
+
+        Title          = 1 << 1,
+        Symbol         = 1 << 2
+
+#if 0
+        MinimizeButton = 1 << 3,
+        MaximizeButton = 1 << 4,
+        CloseButton    = 1 << 5
+#endif
     };
 
-    Q_ENUM( WindowButton )
-    Q_DECLARE_FLAGS( WindowButtons, WindowButton )
+    Q_ENUM( Decoration )
+    Q_DECLARE_FLAGS( Decorations, Decoration )
 
-    QSK_SUBCONTROLS( Panel, TitleBar )
+    QSK_SUBCONTROLS( Panel, TitleBarPanel, TitleBarSymbol, TitleBarText )
 
     QskSubWindow( QQuickItem* parent = nullptr );
-    virtual ~QskSubWindow();
+    ~QskSubWindow() override;
 
-    Q_INVOKABLE void setTitle( const QString& );
-    Q_INVOKABLE QString title() const;
+    void setDecorations( Decorations );
+    void resetDecorations();
+    Decorations decorations() const;
 
-    Q_INVOKABLE void setDecorated( bool );
-    Q_INVOKABLE bool isDecorated() const;
+    void setDecoration( Decoration, bool on = true );
+    bool hasDecoration( Decoration ) const;
 
-    Q_INVOKABLE void setWindowButtons( WindowButtons );
-    Q_INVOKABLE WindowButtons windowButtons() const;
+    void setWindowTitleTextOptions( const QskTextOptions& );
+    QskTextOptions windowTitleTextOptions() const;
 
-    Q_INVOKABLE void setWindowButton( WindowButton, bool on = true );
-    Q_INVOKABLE bool testWindowButton( WindowButton ) const;
+    void setWindowTitle( const QString& );
+    QString windowTitle() const;
+
+    void setWindowIconSource( const QString& );
+    void setWindowIconSource( const QUrl& );
+    QUrl windowIconSource() const;
+
+    void setWindowIcon( const QskGraphic& );
+    QskGraphic windowIcon() const;
+
+    bool hasWindowIcon() const;
 
     QRectF titleBarRect() const;
 
-    virtual QSizeF contentsSizeHint() const override;
-    virtual QRectF layoutRect() const override;
+    QRectF layoutRectForSize( const QSizeF& ) const override;
 
-    bool isActive() const;
+  Q_SIGNALS:
+    void decorationsChanged( Decorations );
+    void windowTitleChanged();
+    void windowTitleTextOptionsChanged();
+    void windowIconChanged();
+    void windowIconSourceChanged();
 
-Q_SIGNALS:
-    void titleChanged();
-    void decoratedChanged();
-    void windowButtonsChanged();
+  protected:
+    bool event( QEvent* ) override;
 
-protected:
-    virtual bool event( QEvent* ) override;
-    virtual void updateLayout() override;
+    void updateLayout() override;
+    QSizeF layoutSizeHint( Qt::SizeHint, const QSizeF& ) const override;
 
-    virtual void itemChange( QQuickItem::ItemChange,
+    void itemChange( QQuickItem::ItemChange,
         const QQuickItem::ItemChangeData& ) override;
 
-private:
+  private:
     class PrivateData;
     std::unique_ptr< PrivateData > m_data;
 };

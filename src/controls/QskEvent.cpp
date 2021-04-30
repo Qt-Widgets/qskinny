@@ -1,5 +1,12 @@
+/******************************************************************************
+ * QSkinny - Copyright (C) 2016 Uwe Rathmann
+ * This file may be used under the terms of the QSkinny License, Version 1.0
+ *****************************************************************************/
+
 #include "QskEvent.h"
 #include "QskGesture.h"
+
+#include <qevent.h>
 
 static void qskRegisterEventTypes()
 {
@@ -17,19 +24,89 @@ static void qskRegisterEventTypes()
 
 Q_CONSTRUCTOR_FUNCTION( qskRegisterEventTypes )
 
-QskEvent::QskEvent( QskEvent::Type type ):
-    QEvent( static_cast< QEvent::Type >( type ) )
+int qskFocusChainIncrement( const QEvent* event )
+{
+    if ( event && event->type() == QEvent::KeyPress )
+    {
+        const auto keyEvent = static_cast< const QKeyEvent* >( event );
+        if ( !( keyEvent->modifiers() & ( Qt::ControlModifier | Qt::AltModifier ) ) )
+        {
+            switch ( keyEvent->key() )
+            {
+                case Qt::Key_Tab:
+                    return 1;
+
+                case Qt::Key_Backtab:
+                    return -1;
+            }
+        }
+    }
+
+    return 0;
+}
+
+QPointF qskMousePosition( const QMouseEvent* event )
+{
+#if QT_VERSION >= QT_VERSION_CHECK( 6, 0, 0 )
+    return event->position();
+#else
+    return event->localPos();
+#endif
+}
+
+QPointF qskMouseScenePosition( const QMouseEvent* event )
+{
+#if QT_VERSION >= QT_VERSION_CHECK( 6, 0, 0 )
+    return event->scenePosition();
+#else
+    return event->windowPos();
+#endif
+}
+
+QPointF qskWheelPosition( const QWheelEvent* event )
+{
+#if QT_VERSION >= QT_VERSION_CHECK( 5, 14, 0 )
+    return event->position();
+#else
+    return event->posF();
+#endif
+}
+
+QPointF qskHoverPosition( const QHoverEvent* event )
+{
+#if QT_VERSION >= QT_VERSION_CHECK( 6, 0, 0 )
+    return event->position();
+#else
+    return event->posF();
+#endif
+}
+
+QskEvent::QskEvent( QskEvent::Type type )
+    : QEvent( static_cast< QEvent::Type >( type ) )
 {
 }
 
+#if QT_VERSION < QT_VERSION_CHECK( 6, 0, 0 )
+
+QskEvent* QskEvent::clone() const
+{
+    return new QskEvent( *this );
+}
+
+#endif
 // -- QskGeometryChangeEvent
 
 QskGeometryChangeEvent::QskGeometryChangeEvent(
-        const QRectF& rect, const QRectF& oldRect ):
-    QskEvent( QskEvent::GeometryChange ),
-    m_rect( rect ),
-    m_oldRect( oldRect )
+        const QRectF& rect, const QRectF& oldRect )
+    : QskEvent( QskEvent::GeometryChange )
+    , m_rect( rect )
+    , m_oldRect( oldRect )
 {
+}
+
+QskGeometryChangeEvent* QskGeometryChangeEvent::clone() const
+{
+    return new QskGeometryChangeEvent( *this );
 }
 
 bool QskGeometryChangeEvent::isResized() const
@@ -44,40 +121,57 @@ bool QskGeometryChangeEvent::isMoved() const
         ( m_rect.y() != m_oldRect.y() );
 }
 
-// -- QskGeometryChangeEvent
+// -- QskWindowChangeEvent
 
 QskWindowChangeEvent::QskWindowChangeEvent(
-        QQuickWindow* oldWindow, QQuickWindow* window ):
-    QskEvent( QskEvent::WindowChange ),
-    m_oldWindow( oldWindow ),
-    m_window( window )
+        QQuickWindow* oldWindow, QQuickWindow* window )
+    : QskEvent( QskEvent::WindowChange )
+    , m_oldWindow( oldWindow )
+    , m_window( window )
 {
+}
+
+QskWindowChangeEvent* QskWindowChangeEvent::clone() const
+{
+    return new QskWindowChangeEvent( *this );
+}
+
+// -- QskPopupEvent
+
+QskPopupEvent::QskPopupEvent( Type type, QskPopup* popup )
+    : QskEvent( type )
+    , m_popup( popup )
+{
+}
+
+QskPopupEvent* QskPopupEvent::clone() const
+{
+    return new QskPopupEvent( *this );
 }
 
 // -- QskGestureEvent
 
-QskGestureEvent::QskGestureEvent( const QskGesture* gesture, bool ownedByEvent ):
-    QskEvent( QskEvent::Gesture ),
-    m_gesture( gesture ),
-    m_gestureOwnedByEvent( ownedByEvent )
+QskGestureEvent::QskGestureEvent( std::shared_ptr< const QskGesture > gesture )
+    : QskEvent( QskEvent::Gesture )
+    , m_gesture( gesture )
 {
 }
 
-QskGestureEvent::~QskGestureEvent()
+QskGestureEvent* QskGestureEvent::clone() const
 {
-    if ( m_gestureOwnedByEvent )
-        delete m_gesture;
+    return new QskGestureEvent( *this );
 }
 
 // -- QskAnimatorEvent
 
-QskAnimatorEvent::QskAnimatorEvent( QskAspect::Aspect aspect, State state ):
-    QskEvent( QskEvent::Animator ),
-    m_aspect( aspect ),
-    m_state( state )
+QskAnimatorEvent::QskAnimatorEvent( QskAspect aspect, State state )
+    : QskEvent( QskEvent::Animator )
+    , m_aspect( aspect )
+    , m_state( state )
 {
 }
 
-QskAnimatorEvent::~QskAnimatorEvent()
+QskAnimatorEvent* QskAnimatorEvent::clone() const
 {
+    return new QskAnimatorEvent( *this );
 }

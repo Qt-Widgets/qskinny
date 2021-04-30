@@ -4,9 +4,10 @@
  *****************************************************************************/
 
 #include "QskObjectTree.h"
-#include <QQuickWindow>
-#include <QQuickItem>
-#include <QGuiApplication>
+
+#include <qguiapplication.h>
+#include <qquickitem.h>
+#include <qquickwindow.h>
 
 bool QskObjectTree::isRoot( const QObject* object )
 {
@@ -19,31 +20,31 @@ QObjectList QskObjectTree::childNodes( const QObject* object )
 
     if ( object == nullptr )
     {
-        for ( QWindow* window : QGuiApplication::topLevelWindows() )
+        const auto windows = QGuiApplication::topLevelWindows();
+        for ( auto window : windows )
             children += window;
     }
     else if ( object->isWindowType() )
     {
         const auto childObjects = object->children();
 
-        for ( QObject* child : childObjects  )
+        for ( auto child : childObjects )
         {
             if ( child->isWindowType() )
-            {
                 children += child;
-            }
-            else if ( qobject_cast< QQuickItem* >( child ) )
-            {
-                children += child;
-            }
+        }
+
+        if ( auto w = qobject_cast< const QQuickWindow* >( object ) )
+        {
+            // For some reason the window is not the parent of its contentItem()
+            children += w->contentItem();
         }
     }
-    else
+    else if ( auto item = qobject_cast< const QQuickItem* >( object ) )
     {
-        const QQuickItem* item = static_cast< const QQuickItem* >( object );
-
         const auto childItems = item->childItems();
-        for ( QQuickItem* child : childItems )
+
+        for ( auto child : childItems )
             children += child;
     }
 
@@ -57,13 +58,11 @@ QObject* QskObjectTree::parentNode( const QObject* object )
 
     if ( object->isWindowType() )
     {
-        QObject* parentObject = object->parent();
-        if ( parentObject == nullptr )
+        if ( object->parent() == nullptr )
             return QGuiApplication::instance();
-
     }
 
-    if ( const QQuickItem* item = qobject_cast< const QQuickItem* >( object ) )
+    if ( auto item = qobject_cast< const QQuickItem* >( object ) )
     {
         if ( item->parentItem() )
             return item->parentItem();
@@ -95,4 +94,3 @@ void QskObjectTree::traverseUp( QObject* object, Visitor& visitor )
             traverseUp( parent, visitor );
     }
 }
-

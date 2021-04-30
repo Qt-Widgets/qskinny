@@ -6,11 +6,9 @@
 #ifndef QSK_POPUP_SKINLET_H
 #define QSK_POPUP_SKINLET_H
 
-#include "QskGlobal.h"
 #include "QskSkinlet.h"
 
 class QskPopup;
-class QskGradient;
 
 class QSK_EXPORT QskPopupSkinlet : public QskSkinlet
 {
@@ -18,25 +16,24 @@ class QSK_EXPORT QskPopupSkinlet : public QskSkinlet
 
     using Inherited = QskSkinlet;
 
-public:
+  public:
     enum NodeRole
     {
         OverlayRole
     };
 
     Q_INVOKABLE QskPopupSkinlet( QskSkin* = nullptr );
-    virtual ~QskPopupSkinlet();
+    ~QskPopupSkinlet() override;
 
-    virtual QRectF subControlRect( const QskSkinnable*,
-        QskAspect::Subcontrol ) const override;
+    QRectF subControlRect( const QskSkinnable*,
+        const QRectF&, QskAspect::Subcontrol ) const override;
 
-protected:
-    virtual QSGNode* updateSubNode( const QskSkinnable*,
+  protected:
+    QSGNode* updateSubNode( const QskSkinnable*,
         quint8 nodeRole, QSGNode* ) const override;
 
-private:
+  private:
     QSGNode* updateOverlayNode( const QskPopup*, QSGNode* ) const;
-    QskGradient overlayGradient( const QskPopup* ) const;
 };
 
 #endif

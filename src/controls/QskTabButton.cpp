@@ -4,20 +4,27 @@
  *****************************************************************************/
 
 #include "QskTabButton.h"
+#include "QskSkinlet.h"
 #include "QskTabBar.h"
 #include "QskTextOptions.h"
+#include "QskQuick.h"
 
-#include <QFontMetricsF>
-#include <QPointer>
+#include <qfontmetrics.h>
+#include <qpointer.h>
 
 QSK_SUBCONTROL( QskTabButton, Panel )
 QSK_SUBCONTROL( QskTabButton, Text )
 
+static inline QskTabBar* qskFindTabBar( QskTabButton* button )
+{
+    return qskFindAncestorOf< QskTabBar* >( button->parentItem() );
+}
+
 class QskTabButton::PrivateData
 {
-public:
-    PrivateData( const QString& txt ):
-        text( txt )
+  public:
+    PrivateData( const QString& txt )
+        : text( txt )
     {
     }
 
@@ -26,18 +33,20 @@ public:
     QPointer< QskTabBar > tabBar;
 };
 
-QskTabButton::QskTabButton( QQuickItem* parent ):
-    QskTabButton( QString(), parent )
+QskTabButton::QskTabButton( QQuickItem* parent )
+    : QskTabButton( QString(), parent )
 {
 }
 
-QskTabButton::QskTabButton( const QString& text, QQuickItem* parent ):
-    Inherited( parent ),
-    m_data( new PrivateData( text ) )
+QskTabButton::QskTabButton( const QString& text, QQuickItem* parent )
+    : Inherited( parent )
+    , m_data( new PrivateData( text ) )
 {
-    resolveTabBar();
+    if ( parent )
+        m_data->tabBar = qskFindTabBar( this );
 
-    setSizePolicy( QskSizePolicy::Minimum, QskSizePolicy::Fixed );
+    initSizePolicy( QskSizePolicy::MinimumExpanding,
+        QskSizePolicy::QskSizePolicy::MinimumExpanding );
 
     setCheckable( true );
     setExclusive( true );
@@ -78,29 +87,32 @@ QskTextOptions QskTabButton::textOptions() const
     return m_data->textOptions;
 }
 
-QSizeF QskTabButton::contentsSizeHint() const
+QRectF QskTabButton::layoutRectForSize( const QSizeF& size ) const
 {
-    QSizeF size( metric( Panel | QskAspect::MinimumWidth ),
-        metric( Panel | QskAspect::MinimumHeight ) );
-
-    if ( !m_data->text.isEmpty() )
-    {
-        const QFontMetricsF fm( effectiveFont( Text ) );
-        const auto textSize = fm.size( Qt::TextShowMnemonic, m_data->text );
-        size += textSize;
-    }
-
-    return size;
+    return subControlContentsRect( size, Panel );
 }
 
-QskTabBar* QskTabButton::tabBar() const
+QskAspect::Placement QskTabButton::effectivePlacement() const
+{
+    if ( m_data->tabBar )
+        return m_data->tabBar->effectivePlacement();
+
+    return QskAspect::NoPlacement;
+}
+
+const QskTabBar* QskTabButton::tabBar() const
+{
+    return m_data->tabBar;
+}
+
+QskTabBar* QskTabButton::tabBar()
 {
     return m_data->tabBar;
 }
 
 void QskTabButton::changeEvent( QEvent* event )
 {
-    switch( event->type() )
+    switch ( event->type() )
     {
         case QEvent::LocaleChange:
         {
@@ -114,7 +126,7 @@ void QskTabButton::changeEvent( QEvent* event )
         }
         case QEvent::ParentChange:
         {
-            resolveTabBar();
+            m_data->tabBar = qskFindTabBar( this );
             break;
         }
         default:
@@ -122,20 +134,6 @@ void QskTabButton::changeEvent( QEvent* event )
     }
 
     Inherited::changeEvent( event );
-}
-
-void QskTabButton::resolveTabBar()
-{
-    auto p = parent();
-    while ( p )
-    {
-        if ( const auto tabBar = qobject_cast< QskTabBar* >( p ) )
-        {
-            m_data->tabBar = tabBar;
-            break;
-        }
-        p = p->parent();
-    }
 }
 
 #include "moc_QskTabButton.cpp"

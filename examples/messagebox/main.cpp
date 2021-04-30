@@ -6,23 +6,23 @@
 #include <SkinnyFont.h>
 #include <SkinnyShortcut.h>
 
-#include <QGuiApplication>
 #include <QFontDatabase>
+#include <QGuiApplication>
 
 #include <QskAspect.h>
-#include <QskObjectCounter.h>
-#include <QskWindow.h>
-#include <QskLinearBox.h>
-#include <QskPushButton.h>
 #include <QskDialog.h>
-#include <QskStandardSymbol.h>
 #include <QskFocusIndicator.h>
+#include <QskLinearBox.h>
+#include <QskObjectCounter.h>
+#include <QskPushButton.h>
+#include <QskStandardSymbol.h>
+#include <QskWindow.h>
 
 class Button : public QskPushButton
 {
-public:
-    Button( const QString& text, QQuickItem* parent = nullptr ):
-        QskPushButton( text, parent )
+  public:
+    Button( const QString& text, QQuickItem* parent = nullptr )
+        : QskPushButton( text, parent )
     {
         setObjectName( text );
         setSizePolicy( QskSizePolicy::MinimumExpanding,
@@ -32,10 +32,12 @@ public:
 
 class ButtonBox : public QskLinearBox
 {
-public:
-    ButtonBox( QQuickItem* parent = nullptr ):
-        QskLinearBox( Qt::Horizontal, 2, parent )
+  public:
+    ButtonBox( QQuickItem* parent = nullptr )
+        : QskLinearBox( Qt::Horizontal, 2, parent )
     {
+        setObjectName( "ButtonBox" );
+
         setMargins( 10 );
         setSpacing( 5 );
 
@@ -58,7 +60,7 @@ public:
         connect( selectButton, &Button::clicked, this, &ButtonBox::execSelection );
     }
 
-private:
+  private:
     void execMessage()
     {
         qDebug() << qskDialog->message( "Message", "Request vector, over.",
@@ -129,10 +131,20 @@ int main( int argc, char* argv[] )
 
     qskDialog->setPolicy( QskDialog::EmbeddedBox );
 
-    ButtonBox* box = new ButtonBox();
-    box->itemAtIndex( 0 )->setFocus( true );
+    auto box = new ButtonBox();
 
-    box->setObjectName( "ButtonBox" );
+    /*
+        To avoid losing the focus, when a message box is executed
+        we have to define the "main window" ( here a ButtonBox ) to
+        be a focusScope.
+     */
+    box->setFlag( QQuickItem::ItemIsFocusScope, true );
+    box->setTabFence( true );
+    box->setFocusPolicy( Qt::TabFocus );
+
+    // setting the initial focus
+    box->itemAtIndex( 0 )->setFocus( true );
+    box->setFocus( true );
 
     QskWindow window;
     window.addItem( box );

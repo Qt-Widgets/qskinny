@@ -3,14 +3,14 @@
  * This file may be used under the terms of the 3-clause BSD License
  *****************************************************************************/
 
-#ifndef _FLOW_LAYOUT_PAGE_
-#define _FLOW_LAYOUT_PAGE_ 1
+#ifndef FLOW_LAYOUT_PAGE
+#define FLOW_LAYOUT_PAGE 1
 
 #include <QskLinearBox.h>
 
 class FlowLayoutPage : public QskLinearBox
 {
-public:
+  public:
     FlowLayoutPage( QQuickItem* parent = nullptr );
 };
 

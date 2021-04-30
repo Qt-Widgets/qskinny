@@ -6,63 +6,67 @@
 #ifndef QSK_GRID_BOX_H
 #define QSK_GRID_BOX_H
 
-#include "QskGlobal.h"
-#include "QskLayout.h"
+#include "QskBox.h"
 
-class QSK_EXPORT QskGridBox : public QskLayout
+class QSK_EXPORT QskGridBox : public QskBox
 {
     Q_OBJECT
 
-    Q_PROPERTY( qreal horizontalSpacing READ horizontalSpacing
-        WRITE setHorizontalSpacing RESET resetHorizontalSpacing
-        NOTIFY horizontalSpacingChanged )
+    Q_PROPERTY( Qt::Alignment defaultAlignment READ defaultAlignment
+        WRITE setDefaultAlignment NOTIFY defaultAlignmentChanged )
 
-    Q_PROPERTY( qreal verticalSpacing READ verticalSpacing
-        WRITE setVerticalSpacing RESET resetVerticalSpacing
-        NOTIFY verticalSpacingChanged )
+    Q_PROPERTY( bool empty READ isEmpty() )
+    Q_PROPERTY( int elementCount READ elementCount )
 
-    using Inherited = QskLayout;
+    using Inherited = QskBox;
 
-public:
+  public:
     explicit QskGridBox( QQuickItem* parent = nullptr );
-    virtual ~QskGridBox();
+    ~QskGridBox() override;
 
-    Q_INVOKABLE void addItem(
-        QQuickItem*, int row, int column, int rowSpan, int columnSpan,
-        Qt::Alignment alignment = Qt::Alignment() );
+    Q_INVOKABLE int addItem( QQuickItem*,
+        int row, int column, int rowSpan, int columnSpan );
 
-    Q_INVOKABLE void addItem(
-        QQuickItem*, int row, int column,
-        Qt::Alignment alignment = Qt::Alignment() );
+    Q_INVOKABLE int addItem( QQuickItem*, int row, int column );
+
+    int addItem( QQuickItem*, int row, int column, Qt::Alignment );
+
+    int addItem( QQuickItem*, int row, int column,
+        int rowSpan, int columnSpan, Qt::Alignment );
+
+    Q_INVOKABLE int addSpacer( const QSizeF&,
+        int row, int column, int rowSpan = 1, int columnSpan = 1 );
+
+    int addColumnSpacer( qreal spacing, int column );
+    int addRowSpacer( qreal spacing, int row );
+
+    void removeItem( const QQuickItem* );
+    void removeAt( int index );
 
     Q_INVOKABLE int rowCount() const;
     Q_INVOKABLE int columnCount() const;
 
+    int elementCount() const;
+
+    QQuickItem* itemAtIndex( int index ) const;
+    int indexOf( const QQuickItem* ) const;
+
+    bool isEmpty() const;
+
     Q_INVOKABLE QQuickItem* itemAt( int row, int column ) const;
     Q_INVOKABLE int indexAt( int row, int column ) const;
 
-    Q_INVOKABLE int rowOfIndex( int index ) const;
-    Q_INVOKABLE int rowSpanOfIndex( int index ) const;
+    Q_INVOKABLE QRect gridOfIndex( int index ) const;
+    Q_INVOKABLE QRect effectiveGridOfIndex( int index ) const;
 
-    Q_INVOKABLE int columnOfIndex( int index ) const;
-    Q_INVOKABLE int columnSpanOfIndex( int index ) const;
+    void setDefaultAlignment( Qt::Alignment );
+    Qt::Alignment defaultAlignment() const;
 
-    // spacings
+    void setSpacing( Qt::Orientations, qreal spacing );
+    void resetSpacing( Qt::Orientations );
+    qreal spacing( Qt::Orientation ) const;
+
     void setSpacing( qreal spacing );
-
-    void setHorizontalSpacing( qreal spacing );
-    void resetHorizontalSpacing();
-    int horizontalSpacing() const;
-
-    void setVerticalSpacing( qreal spacing );
-    void resetVerticalSpacing();
-    int verticalSpacing() const;
-
-    Q_INVOKABLE void setRowSpacing( int row, qreal spacing );
-    Q_INVOKABLE qreal rowSpacing( int row ) const;
-
-    Q_INVOKABLE void setColumnSpacing( int column, qreal spacing );
-    Q_INVOKABLE qreal columnSpacing( int column ) const;
 
     // stretch factors
     Q_INVOKABLE void setRowStretchFactor( int row, int stretch );
@@ -72,97 +76,54 @@ public:
     Q_INVOKABLE int columnStretchFactor( int column ) const;
 
     // row/column size hints
-    Q_INVOKABLE void setRowMinimumHeight( int row, qreal height );
-    Q_INVOKABLE qreal rowMinimumHeight( int row ) const;
 
-    Q_INVOKABLE void setRowPreferredHeight( int row, qreal height );
-    Q_INVOKABLE qreal rowPreferredHeight( int row ) const;
+    Q_INVOKABLE void setColumnWidthHint( int column, Qt::SizeHint, qreal width );
+    Q_INVOKABLE qreal columnWidthHint( int column, Qt::SizeHint ) const;
 
-    Q_INVOKABLE void setRowMaximumHeight( int row, qreal height );
-    Q_INVOKABLE qreal rowMaximumHeight( int row ) const;
+    Q_INVOKABLE void setRowHeightHint( int row, Qt::SizeHint, qreal height );
+    Q_INVOKABLE qreal rowHeightHint( int row, Qt::SizeHint ) const;
 
     Q_INVOKABLE void setRowFixedHeight( int row, qreal height );
-
-    Q_INVOKABLE void setColumnMinimumWidth( int column, qreal width );
-    Q_INVOKABLE qreal columnMinimumWidth( int column ) const;
-
-    Q_INVOKABLE void setColumnPreferredWidth( int column, qreal width );
-    Q_INVOKABLE qreal columnPreferredWidth( int column ) const;
-
-    Q_INVOKABLE void setColumnMaximumWidth( int column, qreal width );
-    Q_INVOKABLE qreal columnMaximumWidth( int column ) const;
-
     Q_INVOKABLE void setColumnFixedWidth( int column, qreal width );
 
-    // alignments
+    void dump() const;
 
-    Q_INVOKABLE void setRowAlignment( int row, Qt::Alignment alignment );
-    Q_INVOKABLE Qt::Alignment rowAlignment( int row ) const;
+  public Q_SLOTS:
+    void invalidate();
+    void clear( bool autoDelete = false );
 
-    Q_INVOKABLE void setColumnAlignment( int column, Qt::Alignment alignment );
-    Q_INVOKABLE Qt::Alignment columnAlignment( int column ) const;
+  Q_SIGNALS:
+    void defaultAlignmentChanged();
 
-    void setAlignment( const QQuickItem* item, Qt::Alignment alignment );
-    Qt::Alignment alignment( const QQuickItem* item ) const;
+  protected:
+    bool event( QEvent* ) override;
+    void geometryChangeEvent( QskGeometryChangeEvent* ) override;
 
-    Q_INVOKABLE void setAlignment( QQuickItem* item, Qt::Alignment alignment );
-    Q_INVOKABLE Qt::Alignment alignment( QQuickItem* item ) const;
+    void itemChange( ItemChange, const ItemChangeData& ) override;
+    void updateLayout() override;
 
-    bool retainSizeWhenHidden( const QQuickItem* ) const;
-    void setRetainSizeWhenHidden( const QQuickItem*, bool on );
+    QSizeF layoutSizeHint( Qt::SizeHint, const QSizeF& ) const override;
 
-    Q_INVOKABLE bool retainSizeWhenHidden( QQuickItem* ) const;
-    Q_INVOKABLE void setRetainSizeWhenHidden( QQuickItem*, bool on );
-
-    virtual qreal heightForWidth( qreal width ) const override;
-    virtual qreal widthForHeight( qreal height ) const override;
-
-    virtual QSizeF contentsSizeHint() const override;
-
-Q_SIGNALS:
-    void verticalSpacingChanged();
-    void horizontalSpacingChanged();
-
-protected:
-    virtual void setupLayoutItem( QskLayoutItem*, int index ) override;
-    virtual void layoutItemInserted( QskLayoutItem*, int index ) override;
-    virtual void layoutItemRemoved( QskLayoutItem*, int index ) override;
-
-private:
-    void setRowSizeHint(
-        Qt::SizeHint which, int row, qreal size,
-        Qt::Orientation orientation );
+  private:
+    void setItemActive( QQuickItem*, bool );
 
     class PrivateData;
     std::unique_ptr< PrivateData > m_data;
 };
 
-inline void QskGridBox::addItem(
-    QQuickItem* item, int row, int column, Qt::Alignment alignment )
+inline int QskGridBox::addItem( QQuickItem* item, int row, int column )
 {
-    addItem( item, row, column, 1, 1, alignment );
+    return addItem( item, row, column, 1, 1 );
 }
 
-// Qml does not like the const versions
-
-inline void QskGridBox::setAlignment( const QQuickItem* item, Qt::Alignment alignment )
+inline bool QskGridBox::isEmpty() const
 {
-    setAlignment( const_cast< QQuickItem* >( item ), alignment );
+    return elementCount() <= 0;
 }
 
-inline Qt::Alignment QskGridBox::alignment( const QQuickItem* item ) const
+inline void QskGridBox::setSpacing( qreal spacing )
 {
-    return alignment( const_cast< QQuickItem* >( item ) );
-}
-
-inline bool QskGridBox::retainSizeWhenHidden( const QQuickItem* item ) const
-{
-    return retainSizeWhenHidden( const_cast< QQuickItem* >( item ) );
-}
-
-inline void QskGridBox::setRetainSizeWhenHidden( const QQuickItem* item, bool on )
-{
-    setRetainSizeWhenHidden( const_cast< QQuickItem* >( item ), on );
+    setSpacing( Qt::Horizontal | Qt::Vertical, spacing );
 }
 
 #endif

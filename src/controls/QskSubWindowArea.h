@@ -6,7 +6,6 @@
 #ifndef QSK_SUB_WINDOW_AREA_H
 #define QSK_SUB_WINDOW_AREA_H 1
 
-#include "QskGlobal.h"
 #include "QskControl.h"
 
 class QskGradient;
@@ -16,34 +15,23 @@ class QSK_EXPORT QskSubWindowArea : public QskControl
 {
     Q_OBJECT
 
-    Q_PROPERTY( QskGradient gradient READ gradient
-        WRITE setGradient RESET resetGradient NOTIFY gradientChanged FINAL )
-
     using Inherited = QskControl;
 
-public:
+  public:
     QSK_SUBCONTROLS( Panel )
 
     QskSubWindowArea( QQuickItem* parent = nullptr );
-    virtual ~QskSubWindowArea();
+    ~QskSubWindowArea() override;
 
-    void setGradient( const QskGradient& gradient );
-    QskGradient gradient() const;
-    void resetGradient();
+  protected:
+    void geometryChangeEvent( QskGeometryChangeEvent* ) override;
 
-
-Q_SIGNALS:
-    void gradientChanged();
-
-protected:
-    virtual void geometryChangeEvent( QskGeometryChangeEvent* ) override;
-
-    virtual bool eventFilter( QObject*, QEvent* ) override;
+    bool eventFilter( QObject*, QEvent* ) override;
     virtual bool mouseEventFilter( QskSubWindow*, const QMouseEvent* );
 
-    virtual void itemChange( ItemChange, const ItemChangeData& ) override;
+    void itemChange( ItemChange, const ItemChangeData& ) override;
 
-private:
+  private:
     virtual void setDragging( QskSubWindow*, bool );
     virtual void setActive( QskSubWindow*, bool );
 

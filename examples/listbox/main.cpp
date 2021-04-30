@@ -6,32 +6,32 @@
 #include <SkinnyFont.h>
 #include <SkinnyShortcut.h>
 
+#include <QskAspect.h>
 #include <QskObjectCounter.h>
 #include <QskSimpleListBox.h>
 #include <QskWindow.h>
-#include <QskAspect.h>
+#include <QskFunctions.h>
 
-#include <QGuiApplication>
 #include <QFontMetricsF>
+#include <QGuiApplication>
 
 class ListBox : public QskSimpleListBox
 {
-public:
+  public:
     ListBox()
     {
-        using namespace QskAspect;
-
         setMargins( QMarginsF( 15, 10, 10, 10 ) );
         setAlternatingRowColors( true );
 
-        // increasing the height of each row: usually the job of the skin !
-        setMetric( Cell | Padding | HorizontalEdges, 20 );
+        // increasing the padding of each row: usually the job of the skin !
+        setPaddingHint( Cell, QMargins( 10, 20, 10, 20 ) );
 
         populate();
 
         setSelectedRow( 5 );
     }
-private:
+
+  private:
     void populate()
     {
         const QString format( "Row %1: The quick brown fox jumps over the lazy dog" );
@@ -45,8 +45,8 @@ private:
         // can prevent the list box from having to find it out
         // the expensive way.
 
-        const QFontMetricsF fm( effectiveFont( Cell ) );
-        setColumnWidthHint( 0, fm.width( entries.last() ) );
+        const qreal maxWidth = qskHorizontalAdvance( effectiveFont( Cell ), entries.last() );
+        setColumnWidthHint( 0, maxWidth );
 
         append( entries );
     }

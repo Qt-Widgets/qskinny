@@ -6,7 +6,6 @@
 #ifndef QSK_FOCUS_INDICATOR_SKINLET_H
 #define QSK_FOCUS_INDICATOR_SKINLET_H
 
-#include "QskGlobal.h"
 #include "QskSkinlet.h"
 
 class QskFocusIndicator;
@@ -17,26 +16,24 @@ class QSK_EXPORT QskFocusIndicatorSkinlet : public QskSkinlet
 
     using Inherited = QskSkinlet;
 
-public:
+  public:
     enum NodeRole
     {
         FrameRole
     };
 
     Q_INVOKABLE QskFocusIndicatorSkinlet( QskSkin* = nullptr );
-    virtual ~QskFocusIndicatorSkinlet();
+    ~QskFocusIndicatorSkinlet() override;
 
-    virtual QRectF subControlRect( const QskSkinnable*,
-        QskAspect::Subcontrol ) const override;
+    QRectF subControlRect( const QskSkinnable*,
+        const QRectF&, QskAspect::Subcontrol ) const override;
 
-protected:
-    virtual QSGNode* updateSubNode( const QskSkinnable*,
+  protected:
+    QSGNode* updateSubNode( const QskSkinnable*,
         quint8 nodeRole, QSGNode* ) const override;
 
-private:
-    QRectF panelRect( const QskFocusIndicator* ) const;
+  private:
     QSGNode* updateFrameNode( const QskFocusIndicator*, QSGNode* ) const;
 };
 
 #endif
-

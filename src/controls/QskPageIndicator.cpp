@@ -4,7 +4,6 @@
  *****************************************************************************/
 
 #include "QskPageIndicator.h"
-#include "QskPageIndicatorSkinlet.h"
 #include "QskAspect.h"
 
 QSK_SUBCONTROL( QskPageIndicator, Panel )
@@ -13,11 +12,11 @@ QSK_SUBCONTROL( QskPageIndicator, Highlighted )
 
 class QskPageIndicator::PrivateData
 {
-public:
-    PrivateData( int count ):
-        count ( count ),
-        currentIndex( -1 ),
-        orientation( Qt::Horizontal )
+  public:
+    PrivateData( int count )
+        : count( count )
+        , currentIndex( -1 )
+        , orientation( Qt::Horizontal )
     {
     }
 
@@ -26,16 +25,16 @@ public:
     Qt::Orientation orientation : 2;
 };
 
-QskPageIndicator::QskPageIndicator( int count, QQuickItem* parent ):
-    Inherited( parent ),
-    m_data( new PrivateData( count ) )
+QskPageIndicator::QskPageIndicator( int count, QQuickItem* parent )
+    : Inherited( parent )
+    , m_data( new PrivateData( count ) )
 {
     // as we don't stretch the bullets
-    setSizePolicy( QskSizePolicy::Fixed, QskSizePolicy::Fixed );
+    initSizePolicy( QskSizePolicy::Fixed, QskSizePolicy::Fixed );
 }
 
-QskPageIndicator::QskPageIndicator( QQuickItem* parent ):
-    QskPageIndicator( 0, parent )
+QskPageIndicator::QskPageIndicator( QQuickItem* parent )
+    : QskPageIndicator( 0, parent )
 {
 }
 
@@ -60,14 +59,14 @@ Qt::Orientation QskPageIndicator::orientation() const
 
 void QskPageIndicator::setOrientation( Qt::Orientation orientation )
 {
-    if (orientation != m_data->orientation )
+    if ( orientation != m_data->orientation )
     {
         m_data->orientation = orientation;
 
         resetImplicitSize();
         update();
 
-        Q_EMIT orientationChanged();
+        Q_EMIT orientationChanged( orientation );
     }
 }
 
@@ -80,7 +79,7 @@ void QskPageIndicator::setCount( int count )
         resetImplicitSize();
         update();
 
-        Q_EMIT countChanged();
+        Q_EMIT countChanged( count );
     }
 }
 
@@ -89,65 +88,13 @@ void QskPageIndicator::setCurrentIndex( qreal index )
     if ( index < 0 || index >= m_data->count )
         index = -1;
 
-    if (index != m_data->currentIndex )
+    if ( index != m_data->currentIndex )
     {
         m_data->currentIndex = index;
         update();
 
-        Q_EMIT currentIndexChanged();
+        Q_EMIT currentIndexChanged( index );
     }
-}
-
-QSizeF QskPageIndicator::contentsSizeHint() const
-{
-    using namespace QskAspect;
-
-    const QSizeF sizeBullet = bulletSize( Bullet );
-    const QSizeF sizeCurrent = bulletSize( Highlighted );
-    const qreal spacing = metric( Panel | Spacing );
-
-    const int n = m_data->count;
-
-    qreal w = 0;
-    qreal h = 0;
-
-    if ( m_data->orientation == Qt::Horizontal )
-    {
-        if ( n > 0 )
-        {
-            w += qMax( sizeCurrent.width(), sizeBullet.width() );
-
-            if ( n > 1 )
-                w += ( n - 1 ) * ( sizeBullet.width() + spacing );
-
-        }
-
-        h = qMax( sizeCurrent.height(), sizeBullet.height() );
-    }
-    else
-    {
-        if ( n > 0 )
-        {
-            h += qMax( sizeCurrent.height(), sizeBullet.height() );
-
-            if ( n > 1 )
-                h += ( n - 1 ) * ( sizeBullet.height() + spacing );
-        }
-
-        w = qMax( sizeCurrent.width(), sizeBullet.width() );
-    }
-
-    const QSizeF minSize(
-        metric( Panel | QskAspect::MinimumWidth ),
-        metric( Panel | QskAspect::MinimumHeight ) );
-
-    return outerBoxSize( Panel, QSizeF( w, h ) ).expandedTo( minSize );
-}
-
-QSizeF QskPageIndicator::bulletSize( QskAspect::Subcontrol subControl ) const
-{
-    const qreal dim = metric( subControl | QskAspect::Size );
-    return QSizeF( dim, dim );
 }
 
 #include "moc_QskPageIndicator.cpp"

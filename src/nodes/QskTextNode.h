@@ -6,31 +6,30 @@
 #ifndef QSK_TEXT_NODE_H
 #define QSK_TEXT_NODE_H
 
-#include "QskGlobal.h"
 #include "QskNamespace.h"
 
-#include <QSGTransformNode>
-#include <QColor>
-#include <Qt>
+#include <qrect.h>
+#include <qsgnode.h>
 
 class QskTextOptions;
+class QskTextColors;
 class QString;
+class QFont;
+class QQuickItem;
 
 class QSK_EXPORT QskTextNode : public QSGTransformNode
 {
-public:
+  public:
     QskTextNode();
-    virtual ~QskTextNode();
+    ~QskTextNode() override;
 
-    bool setTextData( const QString& text, const QSizeF&, const QFont&,
-        const QskTextOptions&, Qt::Alignment, Qsk::TextStyle,
-        const QColor& textColor, const QColor& styleColor, const QColor& linkColor ); 
-private:
+    void setTextData( const QQuickItem* item,
+        const QString& text, const QRectF&, const QFont&,
+        const QskTextOptions&, const QskTextColors&,
+        Qt::Alignment, Qsk::TextStyle );
+
+  private:
     uint m_hash;
-
-    QColor m_textRgb;
-    QColor m_styleRgb;
-    QColor m_linkRgb;
 };
 
 #endif

@@ -6,19 +6,41 @@
 #include "QskDialog.h"
 #include "QskDialogButtonBox.h"
 
-#include "QskMessageWindow.h"
 #include "QskMessageSubWindow.h"
+#include "QskMessageWindow.h"
 
-#include "QskSelectionWindow.h"
 #include "QskSelectionSubWindow.h"
+#include "QskSelectionWindow.h"
 
 #include "QskFocusIndicator.h"
 #include "QskStandardSymbol.h"
-#include "QskAspect.h"
 
-#include <QPointer>
-#include <QQuickWindow>
-#include <QGuiApplication>
+#include <qguiapplication.h>
+#include <qpointer.h>
+#include <qquickwindow.h>
+
+static QskDialog::Action qskActionCandidate( const QskDialogButtonBox* buttonBox )
+{
+    // not the fastest code ever, but usually we always
+    // have a AcceptRole or YesRole button
+
+    const QskDialog::ActionRole candidates[] =
+    {
+        QskDialog::AcceptRole, QskDialog::YesRole,
+        QskDialog::RejectRole, QskDialog::NoRole, QskDialog::DestructiveRole,
+        QskDialog::UserRole, QskDialog::ResetRole,
+        QskDialog::ApplyRole, QskDialog::HelpRole
+    };
+
+    for ( auto role : candidates )
+    {
+        const auto& buttons = buttonBox->buttons( role );
+        if ( !buttons.isEmpty() )
+            return buttonBox->action( buttons.first() );
+    }
+
+    return QskDialog::NoAction;
+}
 
 static QskDialog::DialogCode qskExec( QskDialogWindow* dialogWindow )
 {
@@ -49,38 +71,38 @@ static QQuickWindow* qskSomeQuickWindow()
     return nullptr;
 }
 
-static void qskSetupSubWindow( const QString& title,
-    QskDialog::StandardButtons buttons, QskDialog::StandardButton defaultButton,
-    QskInputSubWindow* subWindow )
+static void qskSetupSubWindow(
+    const QString& title, QskDialog::Actions actions,
+    QskDialog::Action defaultAction, QskDialogSubWindow* subWindow )
 {
     subWindow->setModal( true );
-    subWindow->setTitle( title );
-    subWindow->setStandardButtons( buttons );
+    subWindow->setWindowTitle( title );
+    subWindow->setDialogActions( actions );
 
-    if ( defaultButton == QskDialog::NoButton )
-        defaultButton = subWindow->buttonBox()->defaultButtonCandidate();
+    if ( actions != QskDialog::NoAction && defaultAction == QskDialog::NoAction )
+        defaultAction = qskActionCandidate( subWindow->buttonBox() );
 
-    subWindow->setDefaultButton( defaultButton );
+    subWindow->setDefaultDialogAction( defaultAction );
 }
 
 static void qskSetupWindow(
     QWindow* transientParent, const QString& title,
-    QskDialog::StandardButtons buttons, QskDialog::StandardButton defaultButton,
-    QskInputWindow* window )
+    QskDialog::Actions actions, QskDialog::Action defaultAction,
+    QskDialogWindow* window )
 {
     window->setTransientParent( transientParent );
 
     window->setTitle( title );
-    window->setStandardButtons( buttons );
+    window->setDialogActions( actions );
 
-    if ( defaultButton == QskDialog::NoButton )
-        defaultButton = window->buttonBox()->defaultButtonCandidate();
+    if ( actions != QskDialog::NoAction && defaultAction == QskDialog::NoAction )
+        defaultAction = qskActionCandidate( window->buttonBox() );
 
-    window->setDefaultButton( defaultButton );
+    window->setDefaultDialogAction( defaultAction );
 
     window->setModality( transientParent ? Qt::WindowModal : Qt::ApplicationModal );
 
-    const QSize size = window->effectivePreferredSize();
+    const QSize size = window->sizeConstraint();
 
     if ( window->parent() )
     {
@@ -99,52 +121,53 @@ static void qskSetupWindow(
     window->setModality( Qt::ApplicationModal );
 }
 
-
-static QskDialog::StandardButton qskMessageSubWindow( QQuickWindow* window,
-    const QString& title, const QString& text, int symbolType,
-    QskDialog::StandardButtons buttons, QskDialog::StandardButton defaultButton )
+static QskDialog::Action qskMessageSubWindow(
+    QQuickWindow* window, const QString& title,
+    const QString& text, int symbolType, QskDialog::Actions actions,
+    QskDialog::Action defaultAction )
 {
     QskMessageSubWindow subWindow( window->contentItem() );
     subWindow.setSymbolType( symbolType );
-    subWindow.setInfoText( text );
+    subWindow.setText( text );
 
-    qskSetupSubWindow( title, buttons, defaultButton, &subWindow );
-    (void) subWindow.exec();
+    qskSetupSubWindow( title, actions, defaultAction, &subWindow );
+    ( void ) subWindow.exec();
 
-    QskDialog::StandardButton clickedButton = subWindow.clickedButton();
-    if ( clickedButton == QskDialog::NoButton )
+    auto clickedAction = subWindow.clickedAction();
+    if ( clickedAction == QskDialog::NoAction )
     {
         // dialog might have been closed by the window menu
-        clickedButton = QskDialog::Cancel;
+        clickedAction = QskDialog::Cancel;
     }
 
-    return clickedButton;
+    return clickedAction;
 }
 
-static QskDialog::StandardButton qskMessageWindow( QWindow* transientParent,
-    const QString& title, const QString& text, int symbolType,
-    QskDialog::StandardButtons buttons, QskDialog::StandardButton defaultButton )
+static QskDialog::Action qskMessageWindow(
+    QWindow* transientParent, const QString& title,
+    const QString& text, int symbolType, QskDialog::Actions actions,
+    QskDialog::Action defaultAction )
 {
     QskMessageWindow messageWindow;
     messageWindow.setSymbolType( symbolType );
-    messageWindow.setInfoText( text );
+    messageWindow.setText( text );
 
-    qskSetupWindow( transientParent, title, buttons, defaultButton, &messageWindow );
+    qskSetupWindow( transientParent, title, actions, defaultAction, &messageWindow );
     ( void ) qskExec( &messageWindow );
 
-    QskDialog::StandardButton clickedButton = messageWindow.clickedButton();
-    if ( clickedButton == QskDialog::NoButton )
+    auto clickedAction = messageWindow.clickedAction();
+    if ( clickedAction == QskDialog::NoAction )
     {
         // dialog might have been closed by the window menu
-        clickedButton = QskDialog::Cancel;
+        clickedAction = QskDialog::Cancel;
     }
 
-    return clickedButton;
+    return clickedAction;
 }
 
-static QString qskSelectSubWindow( QQuickWindow* window,
-    const QString& title, const QString& text,
-    QskDialog::StandardButtons buttons, QskDialog::StandardButton defaultButton,
+static QString qskSelectSubWindow(
+    QQuickWindow* window, const QString& title, const QString& text,
+    QskDialog::Actions actions, QskDialog::Action defaultAction,
     const QStringList& entries, int selectedRow )
 {
     QskSelectionSubWindow subWindow( window->contentItem() );
@@ -154,16 +177,16 @@ static QString qskSelectSubWindow( QQuickWindow* window,
 
     QString selectedEntry = subWindow.selectedEntry();
 
-    qskSetupSubWindow( title, buttons, defaultButton, &subWindow );
+    qskSetupSubWindow( title, actions, defaultAction, &subWindow );
     if ( subWindow.exec() == QskDialog::Accepted )
         selectedEntry = subWindow.selectedEntry();
 
     return selectedEntry;
 }
 
-static QString qskSelectWindow( QWindow* transientParent,
-    const QString& title, const QString& text,
-    QskDialog::StandardButtons buttons, QskDialog::StandardButton defaultButton,
+static QString qskSelectWindow(
+    QWindow* transientParent, const QString& title, const QString& text,
+    QskDialog::Actions actions, QskDialog::Action defaultAction,
     const QStringList& entries, int selectedRow )
 {
     QskSelectionWindow window;
@@ -173,7 +196,7 @@ static QString qskSelectWindow( QWindow* transientParent,
 
     QString selectedEntry = window.selectedEntry();
 
-    qskSetupWindow( transientParent, title, buttons, defaultButton, &window );
+    qskSetupWindow( transientParent, title, actions, defaultAction, &window );
     if ( qskExec( &window ) == QskDialog::Accepted )
         selectedEntry = window.selectedEntry();
 
@@ -182,9 +205,9 @@ static QString qskSelectWindow( QWindow* transientParent,
 
 class QskDialog::PrivateData
 {
-public:
-    PrivateData():
-        policy( QskDialog::TopLevelWindow )
+  public:
+    PrivateData()
+        : policy( QskDialog::TopLevelWindow )
     {
     }
 
@@ -192,8 +215,8 @@ public:
     QskDialog::Policy policy : 2;
 };
 
-QskDialog::QskDialog():
-    m_data( new PrivateData )
+QskDialog::QskDialog()
+    : m_data( new PrivateData )
 {
 }
 
@@ -238,14 +261,13 @@ QWindow* QskDialog::transientParent() const
     return m_data->transientParent;
 }
 
-QskDialog::StandardButton QskDialog::message(
+QskDialog::Action QskDialog::message(
     const QString& title, const QString& text, int symbolType,
-    StandardButtons buttons, StandardButton defaultButton ) const
+    Actions actions, Action defaultAction ) const
 {
     if ( m_data->policy == EmbeddedBox )
     {
-        QQuickWindow* quickWindow =
-            qobject_cast< QQuickWindow* >( m_data->transientParent );
+        auto quickWindow = qobject_cast< QQuickWindow* >( m_data->transientParent );
 
         if ( quickWindow == nullptr )
             quickWindow = qskSomeQuickWindow();
@@ -253,44 +275,44 @@ QskDialog::StandardButton QskDialog::message(
         if ( quickWindow )
         {
             return qskMessageSubWindow( quickWindow,
-                title, text, symbolType, buttons, defaultButton );
+                title, text, symbolType, actions, defaultAction );
         }
     }
 
     return qskMessageWindow( m_data->transientParent,
-        title, text, symbolType, buttons, defaultButton );
+        title, text, symbolType, actions, defaultAction );
 }
 
-QskDialog::StandardButton QskDialog::information(
+QskDialog::Action QskDialog::information(
     const QString& title, const QString& text,
-    StandardButtons buttons, StandardButton defaultButton ) const
+    Actions actions, Action defaultAction ) const
 {
     return QskDialog::message( title, text,
-        QskStandardSymbol::Information, buttons, defaultButton );
+        QskStandardSymbol::Information, actions, defaultAction );
 }
 
-QskDialog::StandardButton QskDialog::warning(
+QskDialog::Action QskDialog::warning(
     const QString& title, const QString& text,
-    StandardButtons buttons, StandardButton defaultButton ) const
+    Actions actions, Action defaultAction ) const
 {
     return QskDialog::message( title, text,
-        QskStandardSymbol::Warning, buttons, defaultButton );
+        QskStandardSymbol::Warning, actions, defaultAction );
 }
 
-QskDialog::StandardButton QskDialog::critical(
+QskDialog::Action QskDialog::critical(
     const QString& title, const QString& text,
-    StandardButtons buttons, StandardButton defaultButton ) const
+    Actions actions, Action defaultAction ) const
 {
     return QskDialog::message( title, text,
-        QskStandardSymbol::Critical, buttons, defaultButton );
+        QskStandardSymbol::Critical, actions, defaultAction );
 }
 
-QskDialog::StandardButton QskDialog::question(
+QskDialog::Action QskDialog::question(
     const QString& title, const QString& text,
-    StandardButtons buttons, StandardButton defaultButton ) const
+    Actions actions, Action defaultAction ) const
 {
     return QskDialog::message( title, text,
-        QskStandardSymbol::Question, buttons, defaultButton );
+        QskStandardSymbol::Question, actions, defaultAction );
 }
 
 QString QskDialog::select(
@@ -299,14 +321,13 @@ QString QskDialog::select(
 {
 #if 1
     // should be parameters
-    const QskDialog::StandardButtons buttons( QskDialog::Ok | QskDialog::Cancel );
-    const QskDialog::StandardButton defaultButton = QskDialog::Ok;
+    const QskDialog::Actions actions( QskDialog::Ok | QskDialog::Cancel );
+    const QskDialog::Action defaultAction = QskDialog::Ok;
 #endif
 
     if ( m_data->policy == EmbeddedBox )
     {
-        QQuickWindow* quickWindow =
-            qobject_cast< QQuickWindow* >( m_data->transientParent );
+        auto quickWindow = qobject_cast< QQuickWindow* >( m_data->transientParent );
 
         if ( quickWindow == nullptr )
             quickWindow = qskSomeQuickWindow();
@@ -314,12 +335,12 @@ QString QskDialog::select(
         if ( quickWindow )
         {
             return qskSelectSubWindow( quickWindow,
-                title, text, buttons, defaultButton, entries, selectedRow );
+                title, text, actions, defaultAction, entries, selectedRow );
         }
     }
 
     return qskSelectWindow( m_data->transientParent, title, text,
-        buttons, defaultButton, entries, selectedRow );
+        actions, defaultAction, entries, selectedRow );
 
 }
 

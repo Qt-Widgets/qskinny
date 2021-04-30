@@ -1,7 +1,15 @@
 Makefile
+.qmake.stash
+.uuid
 obj
 moc
 rcc
 lib
 bin
-qvg
+plugins
+fontconfig
+*.swp
+qskinny.pro.user
+*.o
+*.log
+html

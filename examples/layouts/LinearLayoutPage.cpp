@@ -4,8 +4,8 @@
  *****************************************************************************/
 
 #include "LinearLayoutPage.h"
-#include "TestRectangle.h"
 #include "ButtonBox.h"
+#include "TestRectangle.h"
 
 #include <QskAspect.h>
 #include <QskLinearBox.h>
@@ -15,9 +15,9 @@ namespace
 {
     class Box : public QskLinearBox
     {
-    public:
-        Box( QQuickItem* parent = nullptr ):
-            QskLinearBox( Qt::Horizontal, parent )
+      public:
+        Box( QQuickItem* parent = nullptr )
+            : QskLinearBox( Qt::Horizontal, parent )
         {
             setObjectName( "Box" );
 
@@ -25,6 +25,8 @@ namespace
 
             setMargins( 10 );
             setSpacing( 5 );
+
+            setDefaultAlignment( Qt::AlignCenter );
 
             addRectangle( "LightSalmon" );
             addRectangle( "Salmon" );
@@ -35,10 +37,7 @@ namespace
             addRectangle( "FireBrick" );
             addRectangle( "DarkRed" );
 
-            //setRowSpacing( 5, 30 );
             insertSpacer( 5, 30 );
-            //insertStretch( 5, 2 );
-            //setRetainSizeWhenHidden( 2, true );
         }
 
         void mirror()
@@ -50,17 +49,16 @@ namespace
         {
             const int index = 0;
 
-            QQuickItem* item = itemAtIndex( index );
-            removeAt( index );
-
-            if ( item == nullptr )
+            if ( auto item = itemAtIndex( index ) )
             {
-                // how to get the spacer item and its settings ???
-                addSpacer( 30 );
+                removeAt( index );
+                addItem( item );
             }
             else
             {
-                addItem( item );
+                const auto spacing = spacingAtIndex( index );
+                removeAt( index );
+                addSpacer( spacing );
             }
         }
 
@@ -69,33 +67,34 @@ namespace
             setSpacing( this->spacing() + spacing );
         }
 
-    private:
-
+      private:
         void addRectangle( const char* colorName )
         {
-            TestRectangle* rect = new TestRectangle( colorName );
-            rect->setText( QString::number( itemCount() + 1 ) );
+            auto rect = new TestRectangle( colorName );
+            rect->setText( QString::number( elementCount() + 1 ) );
 
-            addItem( rect, Qt::AlignCenter );
+            addItem( rect );
         }
     };
 }
 
-LinearLayoutPage::LinearLayoutPage( QQuickItem* parent ):
-    QskLinearBox( Qt::Vertical, parent )
+LinearLayoutPage::LinearLayoutPage( QQuickItem* parent )
+    : QskLinearBox( Qt::Vertical, parent )
 {
     setMargins( 10 );
-    setBackgroundColor( QskRgbValue::LightSteelBlue );
+    setBackgroundColor( QskRgb::LightSteelBlue );
 
-    Box* box = new Box();
+    auto box = new Box();
 
-    ButtonBox* buttonBox = new ButtonBox();
-    buttonBox->addButton( "Flip", [ = ]() { box->transpose(); } );
-    buttonBox->addButton( "Mirror", [ = ]() { box->mirror(); } );
-    buttonBox->addButton( "Rotate", [ = ]() { box->rotate(); } );
-    buttonBox->addButton( "Spacing+", [ = ]() { box->incrementSpacing( +1 ); }, true );
-    buttonBox->addButton( "Spacing-", [ = ]() { box->incrementSpacing( -1 ); }, true );
+    auto buttonBox = new ButtonBox();
 
-    addItem( buttonBox, Qt::AlignTop | Qt::AlignLeft );
+    buttonBox->setLayoutAlignmentHint( Qt::AlignTop | Qt::AlignLeft );
+    buttonBox->addButton( "Flip", [ box ]() { box->transpose(); } );
+    buttonBox->addButton( "Mirror", [ box ]() { box->mirror(); } );
+    buttonBox->addButton( "Rotate", [ box ]() { box->rotate(); } );
+    buttonBox->addButton( "Spacing+", [ box ]() { box->incrementSpacing( +1 ); }, true );
+    buttonBox->addButton( "Spacing-", [ box ]() { box->incrementSpacing( -1 ); }, true );
+
+    addItem( buttonBox );
     addItem( box );
 }

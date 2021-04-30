@@ -4,10 +4,11 @@
  *****************************************************************************/
 
 #include "QskStatusIndicator.h"
-#include "QskGraphic.h"
 #include "QskColorFilter.h"
+#include "QskGraphic.h"
 #include "QskGraphicProvider.h"
-#include <QDebug>
+
+#include <qdebug.h>
 
 QSK_SUBCONTROL( QskStatusIndicator, Graphic )
 
@@ -15,21 +16,16 @@ namespace
 {
     class StatusData
     {
-    public:
-        StatusData():
-            isDirty( false )
+      public:
+        StatusData( const QskGraphic& graphic )
+            : graphic( graphic )
+            , isDirty( false )
         {
         }
 
-        StatusData( const QskGraphic& graphic ):
-            graphic( graphic ),
-            isDirty( false )
-        {
-        }
-
-        StatusData( const QUrl& url ):
-            source( url ),
-            isDirty( !url.isEmpty() )
+        StatusData( const QUrl& url )
+            : source( url )
+            , isDirty( !url.isEmpty() )
         {
         }
 
@@ -50,21 +46,22 @@ namespace
 
 class QskStatusIndicator::PrivateData
 {
-public:
-    PrivateData():
-        currentStatus( -1 )
+  public:
+    PrivateData()
+        : currentStatus( -1 )
     {
     }
 
     int currentStatus;
     QMap< int, StatusData > map;
+    mutable QList<int> statusList;
 };
 
-QskStatusIndicator::QskStatusIndicator( QQuickItem* parent ):
-    Inherited( parent ),
-    m_data( new PrivateData() )
+QskStatusIndicator::QskStatusIndicator( QQuickItem* parent )
+    : Inherited( parent )
+    , m_data( new PrivateData() )
 {
-    setSizePolicy( QskSizePolicy::Expanding, QskSizePolicy::Expanding );
+    initSizePolicy( QskSizePolicy::Expanding, QskSizePolicy::Expanding );
 }
 
 QskStatusIndicator::~QskStatusIndicator()
@@ -73,8 +70,8 @@ QskStatusIndicator::~QskStatusIndicator()
 
 QUrl QskStatusIndicator::source( int status ) const
 {
-    const auto it = m_data->map.find( status );
-    if ( it != m_data->map.end() )
+    const auto it = m_data->map.constFind( status );
+    if ( it != m_data->map.constEnd() )
         return it->source;
 
     return QUrl();
@@ -99,6 +96,8 @@ void QskStatusIndicator::setSource( int status, const QUrl& url )
     else
     {
         m_data->map.insert( status, StatusData( url ) );
+        m_data->statusList.clear();
+
         hasChanged = true;
     }
 
@@ -115,7 +114,10 @@ QskGraphic QskStatusIndicator::graphic( int status ) const
 {
     const auto it = m_data->map.find( status );
     if ( it != m_data->map.end() )
+    {
+        it->ensureGraphic( this );
         return it->graphic;
+    }
 
     return QskGraphic();
 }
@@ -139,6 +141,7 @@ void QskStatusIndicator::setGraphic( int status, const QskGraphic& graphic )
     else
     {
         m_data->map.insert( status, StatusData( graphic ) );
+        m_data->statusList.clear();
         hasChanged = true;
     }
 
@@ -154,64 +157,24 @@ void QskStatusIndicator::setGraphic( int status, const QskGraphic& graphic )
 QskColorFilter QskStatusIndicator::graphicFilter( int status ) const
 {
     Q_UNUSED( status )
-    return effectiveGraphicFilter( QskStatusIndicator::Graphic );
+    return effectiveGraphicFilter( Graphic );
 }
 
-qreal QskStatusIndicator::heightForWidth( qreal width ) const
+void QskStatusIndicator::setGraphicRole( int role )
 {
-    return sizeConstraint( Qt::Horizontal, width );
+    if ( setGraphicRoleHint( Graphic, role ) )
+        Q_EMIT graphicRoleChanged( role );
 }
 
-qreal QskStatusIndicator::widthForHeight( qreal height ) const
+void QskStatusIndicator::resetGraphicRole()
 {
-    return sizeConstraint( Qt::Vertical, height );
+    if ( resetGraphicRoleHint( Graphic ) )
+        Q_EMIT graphicRoleChanged( graphicRoleHint( Graphic ) );
 }
 
-qreal QskStatusIndicator::sizeConstraint(
-    Qt::Orientation orientation, qreal constraint ) const
+int QskStatusIndicator::graphicRole() const
 {
-    if ( constraint <= 0.0 )
-        return 0.0;
-
-    qreal value = 0.0;
-
-    for ( auto &statusData : m_data->map )
-    {
-        statusData.ensureGraphic( this );
-
-        if ( !statusData.graphic.isEmpty() )
-        {
-            const QSizeF sz = statusData.graphic.defaultSize();
-            if ( !sz.isEmpty() )
-            {
-                qreal v;
-                if ( orientation == Qt::Horizontal )
-                    v = sz.height() * constraint / sz.width();
-                else
-                    v = sz.width() * constraint / sz.height();
-
-                if ( v > value )
-                    value = v;
-            }
-        }
-    }
-
-    return value;
-}
-
-QSizeF QskStatusIndicator::contentsSizeHint() const
-{
-    QSizeF sz( 0, 0 );
-
-    for ( auto &statusData : m_data->map )
-    {
-        statusData.ensureGraphic( this );
-
-        if ( !statusData.graphic.isEmpty() )
-            sz = sz.expandedTo( statusData.graphic.defaultSize() );
-    }
-
-    return sz;
+    return graphicRoleHint( Graphic );
 }
 
 int QskStatusIndicator::status() const
@@ -229,7 +192,7 @@ void QskStatusIndicator::setStatus( int status )
     if ( status == m_data->currentStatus )
         return;
 
-    const auto it = m_data->map.find( status );
+    const auto it = m_data->map.constFind( status );
     if ( it == m_data->map.constEnd() )
     {
         qWarning() << "QskStatusIndicator: invalid status:" << status;
@@ -248,11 +211,24 @@ void QskStatusIndicator::setStatus( int status )
     update();
 }
 
+QList<int> QskStatusIndicator::statusList() const
+{
+    /*
+        We should be have a QMap< int, QskGraphic >, so that
+        users can iterate over all entries without having to
+        do extra lookups for each entry. TODO ...
+     */
+    if ( m_data->statusList.isEmpty() && !m_data->map.isEmpty() )
+        m_data->statusList = m_data->map.keys();
+
+    return m_data->statusList;
+}
+
 void QskStatusIndicator::changeEvent( QEvent* event )
 {
     if ( event->type() == QEvent::StyleChange )
     {
-        for ( auto &statusData : m_data->map )
+        for ( auto& statusData : m_data->map )
         {
             if ( !statusData.source.isEmpty() )
             {

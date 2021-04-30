@@ -6,10 +6,7 @@
 #ifndef QSK_TAB_BUTTON_SKINLET_H
 #define QSK_TAB_BUTTON_SKINLET_H
 
-#include "QskGlobal.h"
 #include "QskSkinlet.h"
-
-class QskTabButton;
 
 class QSK_EXPORT QskTabButtonSkinlet : public QskSkinlet
 {
@@ -17,29 +14,25 @@ class QSK_EXPORT QskTabButtonSkinlet : public QskSkinlet
 
     using Inherited = QskSkinlet;
 
-public:
+  public:
     enum NodeRole
     {
-        ButtonRole,
+        PanelRole,
         TextRole
     };
 
     Q_INVOKABLE QskTabButtonSkinlet( QskSkin* = nullptr );
-    virtual ~QskTabButtonSkinlet();
+    ~QskTabButtonSkinlet() override;
 
-    virtual QRectF subControlRect(
-        const QskSkinnable*, QskAspect::Subcontrol ) const override;
+    QRectF subControlRect( const QskSkinnable*,
+        const QRectF& rect, QskAspect::Subcontrol ) const override;
 
-protected:
-    virtual QSGNode* updateSubNode(
-        const QskSkinnable*, quint8 nodeRole, QSGNode* ) const override;
+    QSizeF sizeHint( const QskSkinnable*,
+        Qt::SizeHint, const QSizeF& ) const override;
 
-private:
-    QRectF textRect( const QskTabButton* ) const;
-    QRectF panelRect( const QskTabButton* ) const;
-
-    QSGNode* updateButtonNode( const QskTabButton*, QSGNode* ) const;
-    QSGNode* updateTextNode( const QskTabButton*, QSGNode* ) const;
+  protected:
+    QSGNode* updateSubNode( const QskSkinnable*,
+        quint8 nodeRole, QSGNode* ) const override;
 };
 
 #endif

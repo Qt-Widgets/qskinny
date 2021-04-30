@@ -12,9 +12,9 @@
 class QskGraphicProvider;
 class QString;
 
-class QskGraphicProviderMap
+class QSK_EXPORT QskGraphicProviderMap
 {
-public:
+  public:
     QskGraphicProviderMap();
     ~QskGraphicProviderMap();
 
@@ -29,7 +29,7 @@ public:
 
     int size() const;
 
-private:
+  private:
     class PrivateData;
     std::unique_ptr< PrivateData > m_data;
 };

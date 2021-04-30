@@ -6,7 +6,6 @@
 #ifndef QSK_TAB_VIEW_SKINLET_H
 #define QSK_TAB_VIEW_SKINLET_H
 
-#include "QskGlobal.h"
 #include "QskSkinlet.h"
 
 class QskTabView;
@@ -17,27 +16,25 @@ class QSK_EXPORT QskTabViewSkinlet : public QskSkinlet
 
     using Inherited = QskSkinlet;
 
-public:
+  public:
     enum NodeRole
     {
         PageRole
     };
 
     Q_INVOKABLE QskTabViewSkinlet( QskSkin* = nullptr );
-    virtual ~QskTabViewSkinlet();
+    ~QskTabViewSkinlet() override;
 
-    virtual QRectF subControlRect(
-        const QskSkinnable*, QskAspect::Subcontrol ) const override;
+    QRectF subControlRect( const QskSkinnable*,
+        const QRectF& rect, QskAspect::Subcontrol ) const override;
 
-protected:
-    virtual QSGNode* updateSubNode( const QskSkinnable*,
+  protected:
+    QSGNode* updateSubNode( const QskSkinnable*,
         quint8 nodeRole, QSGNode* ) const override;
 
-private:
-    QRectF pageRect( const QskTabView* ) const;
-    QRectF tabBarRect( const QskTabView* ) const;
-
-    QSGNode* updatePageNode( const QskTabView*, QSGNode* ) const;
+  private:
+    QRectF pageRect( const QskTabView*, const QRectF& ) const;
+    QRectF tabBarRect( const QskTabView*, const QRectF& ) const;
 };
 
 #endif

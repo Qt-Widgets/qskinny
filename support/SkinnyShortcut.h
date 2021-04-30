@@ -13,16 +13,17 @@ class SKINNY_EXPORT SkinnyShortcut : public QObject
 {
     Q_OBJECT
 
-public:
+  public:
     enum Type
     {
-        Quit = 1,
-        RotateSkin = 2,
-        DebugBackground = 4,
-        DebugStatistics = 8,
+        Quit            = 1 << 0,
+        RotateSkin      = 1 << 1,
+        ChangeFonts     = 1 << 2,
+        DebugBackground = 1 << 3,
+        DebugStatistics = 1 << 4,
 
         DebugShortcuts = DebugBackground | DebugStatistics,
-        AllShortcuts = Quit | RotateSkin | DebugBackground | DebugStatistics
+        AllShortcuts = Quit | RotateSkin | ChangeFonts | DebugBackground | DebugStatistics
     };
 
     Q_ENUM( Type )
@@ -30,11 +31,11 @@ public:
 
     static void enable( Types );
 
-private:
+  private:
     SkinnyShortcut( QObject* parent = nullptr );
 
-private Q_SLOTS:
     void rotateSkin();
+    void changeFonts( int increment );
     void showBackground();
     void debugStatistics();
 };

@@ -7,7 +7,7 @@
 #define QSK_WINDOW_H 1
 
 #include "QskGlobal.h"
-#include <QQuickWindow>
+#include <qquickwindow.h>
 
 class QskWindowPrivate;
 class QskObjectAttributes;
@@ -16,7 +16,8 @@ class QSK_EXPORT QskWindow : public QQuickWindow
 {
     Q_OBJECT
 
-    Q_PROPERTY( bool deleteOnClose READ deleteOnClose WRITE setDeleteOnClose FINAL )
+    Q_PROPERTY( bool deleteOnClose READ deleteOnClose
+        WRITE setDeleteOnClose NOTIFY deleteOnCloseChanged FINAL )
 
     Q_PROPERTY( bool autoLayoutChildren READ autoLayoutChildren
         WRITE setAutoLayoutChildren NOTIFY autoLayoutChildrenChanged FINAL )
@@ -24,26 +25,22 @@ class QSK_EXPORT QskWindow : public QQuickWindow
     Q_PROPERTY( QLocale locale READ locale
         WRITE setLocale RESET resetLocale NOTIFY localeChanged FINAL )
 
-    Q_PROPERTY( FramebufferMode framebufferMode READ framebufferMode
-        WRITE setFramebufferMode
-        NOTIFY framebufferModeChanged FINAL )
-
-    Q_PROPERTY( Visibility visibility READ visibility
-        WRITE setVisibility NOTIFY visibilityChanged )
-
     using Inherited = QQuickWindow;
 
-public:
-    enum FramebufferMode
+  public:
+    enum EventAcceptance
     {
-        DefaultFramebufferMode = 0,
-        OffscreenFramebufferMode = 1
+        EventProcessed = 0,
+        EventPropagationStopped = 1
     };
 
-    Q_ENUM( FramebufferMode )
-
     QskWindow( QWindow* parent = nullptr );
-    virtual ~QskWindow();
+    QskWindow( QQuickRenderControl* renderControl, QWindow* parent = nullptr );
+
+    ~QskWindow() override;
+
+    using Inherited::setScreen;
+    void setScreen( const QString& );
 
     bool deleteOnClose() const;
     void setDeleteOnClose( bool );
@@ -59,38 +56,39 @@ public:
     Q_INVOKABLE void setPreferredSize( const QSize& );
     Q_INVOKABLE QSize preferredSize() const;
 
-    Q_INVOKABLE QSize effectivePreferredSize() const;
+    Q_INVOKABLE QSize sizeConstraint() const;
 
     Q_INVOKABLE void setFixedSize( const QSize& );
-
-    void setFramebufferMode( FramebufferMode );
-    FramebufferMode framebufferMode() const;
 
     void polishItems();
 
     void setCustomRenderMode( const char* mode );
     const char* customRenderMode() const;
 
-Q_SIGNALS:
-    void localeChanged( const QLocale& );
-    void visibilityChanged( QWindow::Visibility visibility );
-    void framebufferModeChanged( FramebufferMode );
-    void autoLayoutChildrenChanged();
+    // extra flag to interprete accepted events
+    void setEventAcceptance( EventAcceptance );
+    EventAcceptance eventAcceptance() const;
 
-public Q_SLOTS:
+  Q_SIGNALS:
+    void localeChanged( const QLocale& );
+    void autoLayoutChildrenChanged();
+    void deleteOnCloseChanged();
+
+  public Q_SLOTS:
     void setLocale( const QLocale& );
     void resizeF( const QSizeF& );
 
-protected:
-    virtual bool event( QEvent* ) override;
-    virtual void resizeEvent( QResizeEvent* ) override;
-    virtual void exposeEvent( QExposeEvent* ) override;
+  protected:
+    bool event( QEvent* ) override;
+    void resizeEvent( QResizeEvent* ) override;
+    void exposeEvent( QExposeEvent* ) override;
+    void keyPressEvent( QKeyEvent* ) override;
+    void keyReleaseEvent( QKeyEvent* ) override;
 
     virtual void layoutItems();
+    virtual void ensureFocus( Qt::FocusReason );
 
-private:
-    void resizeFramebuffer();
-    void blitFramebuffer();
+  private:
     void enforceSkin();
 
     Q_DECLARE_PRIVATE( QskWindow )

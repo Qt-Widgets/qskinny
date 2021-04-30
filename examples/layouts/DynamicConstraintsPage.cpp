@@ -13,36 +13,36 @@
 
 namespace
 {
-    class Control : public QskControl
+    class Control final : public QskControl
     {
-    public:
+      public:
         Control( const char* colorName, QQuickItem* parent = nullptr );
         Control( const char* colorName, qreal aspectRatio, QQuickItem* parent = nullptr );
 
-        virtual qreal heightForWidth( qreal width ) const override final;
-        virtual qreal widthForHeight( qreal height ) const override final;
-
         void transpose();
 
-    private:
+      protected:
+        QSizeF layoutSizeHint( Qt::SizeHint, const QSizeF& ) const override;
+
+      private:
         qreal m_aspectRatio;
     };
 
     class Box : public QskLinearBox
     {
-    public:
+      public:
         Box( QQuickItem* parent = nullptr );
 
         void flip();
 
-    private:
+      private:
         void addControl( Control* );
     };
 }
 
-Control::Control( const char* colorName, QQuickItem* parent ):
-    QskControl( parent ),
-    m_aspectRatio( 1.0 )
+Control::Control( const char* colorName, QQuickItem* parent )
+    : QskControl( parent )
+    , m_aspectRatio( 1.0 )
 {
     setObjectName( colorName );
 
@@ -52,27 +52,32 @@ Control::Control( const char* colorName, QQuickItem* parent ):
     setPreferredSize( 80, 100 );
 }
 
-Control::Control( const char* colorName, qreal aspectRatio, QQuickItem* parent ):
-    QskControl( parent ),
-    m_aspectRatio( aspectRatio )
+Control::Control( const char* colorName, qreal aspectRatio, QQuickItem* parent )
+    : QskControl( parent )
+    , m_aspectRatio( aspectRatio )
 {
     setObjectName( colorName );
 
     setBackgroundColor( colorName );
 
-    //setSizePolicy( QskSizePolicy::Constrained, QskSizePolicy::Ignored );
+    // setSizePolicy( QskSizePolicy::Constrained, QskSizePolicy::Ignored );
     setSizePolicy( QskSizePolicy::Constrained, QskSizePolicy::Fixed );
     setPreferredHeight( 100 );
 }
 
-qreal Control::heightForWidth( qreal width ) const
+QSizeF Control::layoutSizeHint(
+    Qt::SizeHint which, const QSizeF& constraint ) const
 {
-    return width / m_aspectRatio;
-}
+    if ( which == Qt::PreferredSize )
+    {
+        if ( constraint.width() >= 0.0 )
+            return QSizeF( -1.0, constraint.width() / m_aspectRatio );
 
-qreal Control::widthForHeight( qreal height ) const
-{
-    return height * m_aspectRatio;
+        if ( constraint.height() >= 0.0 )
+            return QSizeF( constraint.height() * m_aspectRatio, -1.0 );
+    }
+
+    return QSizeF();
 }
 
 void Control::transpose()
@@ -83,12 +88,13 @@ void Control::transpose()
     setSizePolicy( sizePolicy().verticalPolicy(), sizePolicy().horizontalPolicy() );
 }
 
-Box::Box( QQuickItem* parent ):
-    QskLinearBox( Qt::Horizontal, 2, parent )
+Box::Box( QQuickItem* parent )
+    : QskLinearBox( Qt::Horizontal, 2, parent )
 {
     setObjectName( "Box" );
 
     setBackgroundColor( Qt::white );
+    setDefaultAlignment( Qt::AlignCenter );
 
     setMargins( 10 );
     setSpacing( 5 );
@@ -105,35 +111,34 @@ Box::Box( QQuickItem* parent ):
 
 void Box::flip()
 {
-    setActive( false );
-
-    for ( int i = 0; i < itemCount(); i++ )
+    for ( int i = 0; i < elementCount(); i++ )
     {
-        if ( Control* control = dynamic_cast< Control* >( itemAtIndex( i ) ) )
+        if ( auto control = dynamic_cast< Control* >( itemAtIndex( i ) ) )
             control->transpose();
     }
 
     transpose();
-    setActive( true );
 }
 
 void Box::addControl( Control* control )
 {
-    addItem( control, Qt::AlignCenter );
+    addItem( control );
 }
 
-DynamicConstraintsPage::DynamicConstraintsPage( QQuickItem* parent ):
-    QskLinearBox( Qt::Vertical, parent )
+DynamicConstraintsPage::DynamicConstraintsPage( QQuickItem* parent )
+    : QskLinearBox( Qt::Vertical, parent )
 {
     setMargins( 10 );
-    setBackgroundColor( QskRgbValue::LightSteelBlue );
+    setBackgroundColor( QskRgb::LightSteelBlue );
 
-    Box* box = new Box();
+    auto box = new Box();
 
-    QskPushButton* button = new QskPushButton( "Flip" );
+    auto button = new QskPushButton( "Flip" );
     button->setSizePolicy( Qt::Horizontal, QskSizePolicy::Fixed );
+    button->setLayoutAlignmentHint( Qt::AlignTop | Qt::AlignLeft );
+
     QObject::connect( button, &QskPushButton::clicked, box, &Box::flip );
 
-    addItem( button, Qt::AlignTop | Qt::AlignLeft );
+    addItem( button );
     addItem( box );
 }

@@ -3,91 +3,20 @@
  * This file may be used under the terms of the 3-clause BSD License
  *****************************************************************************/
 
+#include "label/LabelPage.h"
+#include "progressbar/ProgressBarPage.h"
+#include "slider/SliderPage.h"
+
 #include <SkinnyFont.h>
 #include <SkinnyShortcut.h>
-
-#include <QskModule.h>
-#include <QskSetup.h>
-#include <QskSkin.h>
-#include <QskSkinTransition.h>
-#include <QskAspect.h>
-#include <QskObjectCounter.h>
+#include <SkinnyShapeProvider.h>
 
 #include <QskFocusIndicator.h>
-#include <QskListView.h>
-#include <QskSlider.h>
+#include <QskObjectCounter.h>
+#include <QskTabView.h>
+#include <QskWindow.h>
 
-#include <QQmlApplicationEngine>
 #include <QGuiApplication>
-
-class SkinTransition: public QskSkinTransition
-{
-public:
-    SkinTransition( const QColor& accent ):
-        m_accent( accent )
-    {
-    }
-
-protected:
-    virtual void updateSkin( QskSkin*, QskSkin* skin ) override final
-    {
-        skin->resetColors( m_accent );
-        skin->setColor( QskListView::CellSelected, m_accent.darker( 130 ) );
-        skin->setColor( QskFocusIndicator::Panel | QskAspect::Border, m_accent.darker( 150 ) );
-    }
-
-private:
-    const QColor m_accent;
-};
-
-class Theme: public QObject
-{
-    Q_OBJECT
-    Q_PROPERTY( QColor accent READ accent WRITE setAccent NOTIFY accentChanged )
-
-public:
-    Theme( QObject* parent = nullptr ):
-        QObject( parent ),
-        m_accent( qskSetup->skin()->color( QskAspect::Color ) )
-    {
-        connect( qskSetup, &QskSetup::skinChanged,
-            [this]( QskSkin* ) { updateColors(); } );
-    }
-
-    void setAccent( QColor color )
-    {
-        if ( m_accent != color )
-        {
-            m_accent = color;
-            updateColors();
-
-            Q_EMIT accentChanged();
-        }
-    }
-
-    QColor accent() const
-    {
-        return m_accent;
-    }
-
-Q_SIGNALS:
-    void accentChanged();
-
-private:
-    void updateColors()
-    {
-        SkinTransition transition( m_accent );
-
-        transition.setMask( SkinTransition::Color );
-        transition.setSourceSkin( qskSetup->skin() );
-        transition.setTargetSkin( qskSetup->skin() );
-        transition.setAnimation( 500 );
-
-        transition.process();
-    }
-
-    QColor m_accent;
-};
 
 int main( int argc, char* argv[] )
 {
@@ -95,20 +24,32 @@ int main( int argc, char* argv[] )
     QskObjectCounter counter( true );
 #endif
 
-    qputenv( "QT_IM_MODULE", "skinny" );
-
-    QskModule::registerTypes();
-    qmlRegisterType< Theme >( "Theme", 1, 0, "Theme" );
+    Qsk::addGraphicProvider( "shapes", new SkinnyShapeProvider() );
 
     QGuiApplication app( argc, argv );
 
     SkinnyFont::init( &app );
-    SkinnyShortcut::enable( SkinnyShortcut::Quit |
-        SkinnyShortcut::DebugShortcuts );
+    SkinnyShortcut::enable( SkinnyShortcut::AllShortcuts );
 
-    QQmlApplicationEngine engine( QUrl( "qrc:/qml/gallery.qml" ) );
+    auto tabView = new QskTabView();
+
+    tabView->setMargins( 10 );
+    tabView->setTabPosition( Qsk::Left );
+    tabView->setAutoFitTabs( true );
+
+    tabView->addTab( "Labels", new LabelPage() );
+    tabView->addTab( "Sliders", new SliderPage() );
+    tabView->addTab( "Progress\nBars", new ProgressBarPage() );
+
+    QSize size( 800, 600 );
+    size = size.expandedTo( tabView->sizeHint().toSize() );
+
+    QskWindow window;
+    window.addItem( tabView );
+    window.addItem( new QskFocusIndicator() );
+
+    window.resize( size );
+    window.show();
 
     return app.exec();
 }
-
-#include "main.moc"

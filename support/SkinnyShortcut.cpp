@@ -1,12 +1,13 @@
 #include "SkinnyShortcut.h"
 
-#include <QskSkinFactory.h>
-#include <QskShortcut.h>
+#include <QskShortcutMap.h>
 #include <QskSetup.h>
+#include <QskSkinManager.h>
 #include <QskWindow.h>
 #include <QskAspect.h>
 #include <QskSkin.h>
 #include <QskControl.h>
+#include <QskQuick.h>
 #include <QskSkinTransition.h>
 
 #include <QQuickItem>
@@ -16,18 +17,7 @@
 #include <QDebug>
 
 #include <unordered_map>
-
-namespace
-{
-    class SkinTransition : public QskSkinTransition
-    {
-    protected:
-        virtual void updateSkin( QskSkin*, QskSkin* ) override final
-        {
-            // nop
-        }
-    };
-}
+#include <iostream>
 
 SkinnyShortcut::SkinnyShortcut( QObject* parent ):
     QObject( parent )
@@ -36,39 +26,57 @@ SkinnyShortcut::SkinnyShortcut( QObject* parent ):
 
 void SkinnyShortcut::enable( Types types )
 {
+    using namespace std;
+
     static SkinnyShortcut s_shortcut;
+
+    if ( types & RotateSkin )
+    {
+        QskShortcutMap::addShortcut( QKeySequence( Qt::CTRL | Qt::Key_S ),
+            false, &s_shortcut, &SkinnyShortcut::rotateSkin );
+        cout << "CTRL-S to change the skin." << endl;
+    }
+
+    if ( types & ChangeFonts )
+    {
+        QskShortcutMap::addShortcut( QKeySequence( Qt::CTRL | Qt::Key_F ),
+            false, &s_shortcut, [] { s_shortcut.changeFonts( +1 ); } );
+
+        QskShortcutMap::addShortcut( QKeySequence( Qt::CTRL | Qt::Key_G ),
+            false, &s_shortcut, [] { s_shortcut.changeFonts( -1 ); } );
+
+        cout << "CTRL-F to increase the font size." << endl;
+        cout << "CTRL-G to decrease the font size." << endl;
+    }
+
+    if ( types & DebugBackground )
+    {
+        QskShortcutMap::addShortcut( QKeySequence( Qt::CTRL | Qt::Key_B ),
+            false, &s_shortcut, &SkinnyShortcut::showBackground );
+        cout << "CTRL-B to enable visual debugging modes." << endl;
+    }
+
+    if ( types & DebugStatistics )
+    {
+        QskShortcutMap::addShortcut( QKeySequence( Qt::CTRL | Qt::Key_K ),
+            false, &s_shortcut, &SkinnyShortcut::debugStatistics );
+        cout << "CTRL-K to dump statistics about the items/nodes being currently used." << endl;
+    }
 
     if ( types & Quit )
     {
         // QKeySequence::Quit crashes the application
         // when not being implemented by the platform !!
 
-        QskShortcut::addShortcut( QKeySequence( Qt::CTRL + Qt::Key_Q ),
-            QGuiApplication::instance(), SLOT( quit() ) );
-    }
-
-    if ( types & RotateSkin )
-    {
-        QskShortcut::addShortcut( QKeySequence( Qt::CTRL + Qt::Key_S ),
-            &s_shortcut, SLOT( rotateSkin() ) );
-    }
-
-    if ( types & DebugBackground )
-    {
-        QskShortcut::addShortcut( QKeySequence( Qt::CTRL + Qt::Key_B ),
-            &s_shortcut, SLOT( showBackground() ) );
-    }
-
-    if ( types & DebugStatistics )
-    {
-        QskShortcut::addShortcut( QKeySequence( Qt::CTRL + Qt::Key_K ),
-            &s_shortcut, SLOT( debugStatistics() ) );
+        QskShortcutMap::addShortcut( QKeySequence( Qt::CTRL | Qt::Key_Q ),
+            false, QGuiApplication::instance(), &QGuiApplication::quit );
+        cout << "CTRL-Q to terminate the application." << endl;
     }
 }
 
 void SkinnyShortcut::rotateSkin()
 {
-    const QStringList names = Qsk::skinNames();
+    const QStringList names = qskSkinManager->skinNames();
     if ( names.size() <= 1 )
         return;
 
@@ -81,7 +89,7 @@ void SkinnyShortcut::rotateSkin()
 
     QskSkin* newSkin = qskSetup->setSkin( names[ index ] );
 
-    SkinTransition transition;
+    QskSkinTransition transition;
 
     //transition.setMask( QskAspect::Color ); // Metrics are flickering -> TODO
     transition.setSourceSkin( oldSkin );
@@ -123,9 +131,10 @@ void SkinnyShortcut::showBackground()
         scengraphDebugMode = sgDebugModes[ id - 2 ];
     }
 
-    qskSetup->setControlFlag( QskSetup::DebugForceBackground, forceBackground );
+    qskSetup->setItemUpdateFlag( QskQuickItem::DebugForceBackground, forceBackground );
 
-    for ( auto window : QGuiApplication::topLevelWindows() )
+    const auto windows = QGuiApplication::topLevelWindows();
+    for ( auto window : windows )
     {
         if ( QskWindow* w = qobject_cast< QskWindow* >( window ) )
         {
@@ -136,6 +145,36 @@ void SkinnyShortcut::showBackground()
             }
         }
     }
+}
+
+void SkinnyShortcut::changeFonts( int increment )
+{
+    auto skin = qskSetup->skin();
+
+    const auto fonts = skin->fonts();
+
+    for ( auto it = fonts.begin(); it != fonts.end(); ++it )
+    {
+        auto role = it->first;
+        auto font = it->second;
+
+        if ( font.pixelSize() > 0 )
+        {
+            const auto newSize = font.pixelSize() + increment;
+            if ( newSize > 0 )
+                font.setPixelSize( newSize );
+        }
+        else
+        {
+            const auto newSize = font.pointSizeF() + increment;
+            if ( newSize > 0 )
+                font.setPointSizeF( font.pointSizeF() + increment );
+        }
+
+        skin->setFont( role, font );
+    }
+
+    Q_EMIT qskSetup->skinChanged( skin );
 }
 
 static inline void countNodes( const QSGNode* node, int& counter )
@@ -154,11 +193,11 @@ static inline void countNodes( const QSGNode* node, int& counter )
 
 static void countNodes( const QQuickItem* item, int& counter )
 {
-    const auto itemNode = QskControl::itemNode( item );
+    const auto itemNode = qskItemNode( item );
 
     if ( itemNode )
     {
-        auto node = QskControl::paintNode( item );
+        auto node = qskPaintNode( item );
         if ( node )
         {
             countNodes( node, counter );
@@ -193,14 +232,16 @@ static void countItems( const QQuickItem* item, int counter[4] )
             counter[3] += nodeCounter;
         }
 
-        for ( const auto* child : item->childItems() )
+        const auto children = item->childItems();
+        for ( const auto* child : children )
             countItems( child, counter );
     }
 }
 
 void SkinnyShortcut::debugStatistics()
 {
-    for ( auto window : QGuiApplication::topLevelWindows() )
+    const auto windows = QGuiApplication::topLevelWindows();
+    for ( auto window : windows )
     {
         const auto w = qobject_cast< const QQuickWindow* >( window );
         if ( w == nullptr )
@@ -210,7 +251,7 @@ void SkinnyShortcut::debugStatistics()
         countItems( w->contentItem(), counter );
 
         qDebug() << w << "\n\titems:" << counter[0] << "visible" << counter[1]
-            << "\n\tnodes:" << counter[2] << "visible" << counter[3];
+            << "\n\tnodes:" << counter[2] << "visible" << counter[3]; 
     }
 }
 

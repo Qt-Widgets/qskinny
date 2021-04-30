@@ -5,24 +5,30 @@
 
 #include "QskAbstractButton.h"
 #include "QskAspect.h"
+#include "QskEvent.h"
+#include "QskQuick.h"
 
-#include <QBasicTimer>
+#include <qbasictimer.h>
 
-QSK_STATE( QskAbstractButton, Flat, QskAspect::FirstSystemState << 1 )
-QSK_STATE( QskAbstractButton, Checked, QskAspect::LastSystemState >> 4 )
-QSK_STATE( QskAbstractButton, Pressed, QskAspect::LastSystemState >> 3 )
-QSK_STATE( QskAbstractButton, Checkable, QskAspect::LastSystemState >> 2 )
+// Flat/Checkable are no states - we need to get rid of them. TODO ...
+QSK_SYSTEM_STATE( QskAbstractButton, Flat, QskAspect::FirstSystemState << 1 )
+#if 1
+// Wrong: we are overlapping with the user states, TODO ...
+QSK_STATE( QskAbstractButton, Checked, QskAspect::LastUserState )
+#endif
+QSK_SYSTEM_STATE( QskAbstractButton, Pressed, QskAspect::LastSystemState >> 3 )
+QSK_SYSTEM_STATE( QskAbstractButton, Checkable, QskAspect::LastSystemState >> 2 )
 
 static QskAbstractButton* qskCheckedSibling( const QskAbstractButton* button )
 {
-    QQuickItem* parentItem = button->parentItem();
+    const auto parentItem = button->parentItem();
     if ( parentItem == nullptr )
         return nullptr;
 
     const auto siblings = parentItem->childItems();
-    for ( QQuickItem* sibling : siblings )
+    for ( auto sibling : siblings )
     {
-        if ( QskAbstractButton* btn = qobject_cast< QskAbstractButton* >( sibling ) )
+        if ( auto btn = qobject_cast< QskAbstractButton* >( sibling ) )
         {
             if ( btn != button && btn->exclusive() && btn->isChecked() )
                 return btn;
@@ -34,31 +40,31 @@ static QskAbstractButton* qskCheckedSibling( const QskAbstractButton* button )
 
 class QskAbstractButton::PrivateData
 {
-public:
-    PrivateData():
-        autoRepeatDelay( 300 ),
-        autoRepeatInterval( 100 ),
-        exclusive( false ),
-        autoRepeat( false )
+  public:
+    PrivateData()
+        : autoRepeatDelay( 300 )
+        , autoRepeatInterval( 100 )
+        , exclusive( false )
+        , autoRepeat( false )
     {
     }
 
     QBasicTimer repeatTimer;
 
-    int autoRepeatDelay; // milliseconds
+    int autoRepeatDelay;    // milliseconds
     int autoRepeatInterval; // milliseconds
 
     bool exclusive : 1;
     bool autoRepeat : 1;
 };
 
-QskAbstractButton::QskAbstractButton( QQuickItem* parent ):
-    Inherited( parent ),
-    m_data( new PrivateData() )
+QskAbstractButton::QskAbstractButton( QQuickItem* parent )
+    : Inherited( parent )
+    , m_data( new PrivateData() )
 {
+    setFocusPolicy( Qt::StrongFocus );
     setAcceptedMouseButtons( Qt::LeftButton );
     setAcceptHoverEvents( true );
-    setActiveFocusOnTab( true );
 }
 
 QskAbstractButton::~QskAbstractButton()
@@ -82,11 +88,16 @@ void QskAbstractButton::releaseButton()
         // maybe there is more work to have the signals coming
         // in a logical order. TODO ...
 
-        setChecked( !( skinState() & Checked ) );
+        setCheckedState( !( skinState() & Checked ) );
     }
 
     setPressed( false );
     Q_EMIT clicked();
+}
+
+void QskAbstractButton::setCheckedState( bool on )
+{
+    setChecked( on );
 }
 
 void QskAbstractButton::toggle()
@@ -105,7 +116,7 @@ void QskAbstractButton::setPressed( bool on )
         return;
 
     setSkinStateFlag( Pressed, on );
-    Q_EMIT pressedChanged();
+    Q_EMIT pressedChanged( on );
 
     if ( on )
         Q_EMIT pressed();
@@ -131,7 +142,7 @@ void QskAbstractButton::setCheckable( bool on )
         return;
 
     setSkinStateFlag( Checkable, on );
-    Q_EMIT checkableChanged();
+    Q_EMIT checkableChanged( on );
 }
 
 bool QskAbstractButton::isCheckable() const
@@ -160,12 +171,12 @@ void QskAbstractButton::setChecked( bool on )
     }
 
     setSkinStateFlag( Checked, on );
-    Q_EMIT checkedChanged();
+    Q_EMIT checkedChanged( on );
     Q_EMIT toggled( on );
 
     if ( checkedButton )
     {
-        Q_EMIT checkedButton->checkedChanged();
+        Q_EMIT checkedButton->checkedChanged( false );
         Q_EMIT checkedButton->toggled( false );
     }
 }
@@ -186,7 +197,7 @@ void QskAbstractButton::setAutoRepeat( bool on )
         else
             m_data->repeatTimer.stop();
 
-        Q_EMIT autoRepeatChanged();
+        Q_EMIT autoRepeatChanged( on );
     }
 }
 
@@ -228,7 +239,7 @@ void QskAbstractButton::setExclusive( bool on )
     if ( on != m_data->exclusive )
     {
         m_data->exclusive = on;
-        Q_EMIT exclusiveChanged();
+        Q_EMIT exclusiveChanged( on );
     }
 }
 
@@ -239,10 +250,28 @@ bool QskAbstractButton::exclusive() const
 
 bool QskAbstractButton::event( QEvent* event )
 {
-    if ( event->type() == QEvent::Shortcut )
+    const auto eventType = static_cast< int >( event->type() );
+    switch ( eventType )
     {
-        // TODO
-        // setFocus( true, Qt::ShortcutFocusReason );
+        case QEvent::Shortcut:
+        {
+            // TODO
+            // setFocus( true, Qt::ShortcutFocusReason );
+            break;
+        }
+        case QskEvent::WindowChange:
+        {
+            if ( qskIsItemComplete( this ) && isPressed() )
+            {
+                /*
+                    When the window change happens on pressed() we won't get
+                    the corrsponding release.
+                 */
+                setPressed( false );
+            }
+
+            break;
+        }
     }
 
     return Inherited::event( event );
@@ -250,18 +279,16 @@ bool QskAbstractButton::event( QEvent* event )
 
 void QskAbstractButton::keyPressEvent( QKeyEvent* event )
 {
-    if ( !event->isAutoRepeat() )
+    switch ( event->key() )
     {
-        switch ( event->key() )
+        case Qt::Key_Select:
+        case Qt::Key_Space:
         {
-            case Qt::Key_Select:
-            case Qt::Key_Space:
-            {
+            if ( !event->isAutoRepeat() )
                 setPressed( true );
-                return;
-            }
-            default:
-                break;
+
+            // always accepting
+            return;
         }
     }
 
@@ -302,21 +329,15 @@ void QskAbstractButton::mouseMoveEvent( QMouseEvent* event )
     event->accept();
 }
 
-void QskAbstractButton::mousePressEvent( QMouseEvent* event )
+void QskAbstractButton::mousePressEvent( QMouseEvent* )
 {
-    // QPlatformTheme::GroupBoxTitleFont
-    // isSignalConnected( pressAndHold, ());
-    // QGuiApplication::styleHints()->mousePressAndHoldInterval()
+    // QGuiApplication::styleHints()->mousePressAndHoldInterval() ???
     setPressed( true );
-    forceActiveFocus( Qt::MouseFocusReason );
-
-    event->accept();
 }
 
-void QskAbstractButton::mouseReleaseEvent( QMouseEvent* event )
+void QskAbstractButton::mouseReleaseEvent( QMouseEvent* )
 {
     releaseButton();
-    event->accept();
 }
 
 void QskAbstractButton::mouseUngrabEvent()

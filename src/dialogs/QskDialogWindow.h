@@ -6,41 +6,63 @@
 #ifndef QSK_DIALOG_WINDOW_H
 #define QSK_DIALOG_WINDOW_H 1
 
-#include "QskGlobal.h"
-#include "QskWindow.h"
 #include "QskDialog.h"
-#include <memory>
+#include "QskWindow.h"
+
+class QskDialogButtonBox;
+class QskPushButton;
 
 class QSK_EXPORT QskDialogWindow : public QskWindow
 {
     Q_OBJECT
 
+    Q_PROPERTY( QskDialog::Actions dialogActions
+        READ dialogActions WRITE setDialogActions )
+
     using Inherited = QskWindow;
 
-public:
+  public:
     QskDialogWindow( QWindow* parent = nullptr );
-    virtual ~QskDialogWindow();
+    ~QskDialogWindow() override;
+
+    QskDialog::Actions dialogActions() const;
+    void setDialogActions( QskDialog::Actions );
+
+    Q_INVOKABLE QskDialog::Action clickedAction() const;
 
     Q_INVOKABLE QskDialog::DialogCode result() const;
     Q_INVOKABLE QskDialog::DialogCode exec();
 
-Q_SIGNALS:
+    void setDefaultDialogAction( QskDialog::Action );
+
+    void setDefaultButton( QskPushButton* );
+    QskPushButton* defaultButton() const;
+
+    QskDialogButtonBox* buttonBox();
+    const QskDialogButtonBox* buttonBox() const;
+
+    void setDialogContentItem( QQuickItem* );
+    QQuickItem* dialogContentItem() const;
+
+  Q_SIGNALS:
     void finished( QskDialog::DialogCode result );
     void accepted();
     void rejected();
 
-public Q_SLOTS:
-    void done( QskDialog::DialogCode );
+  public Q_SLOTS:
     void accept();
     void reject();
 
-protected:
+    virtual void done( QskDialog::DialogCode );
+
+  protected:
     void setResult( QskDialog::DialogCode r );
+    virtual QskDialogButtonBox* createButtonBox();
 
-    virtual bool event( QEvent* ) override;
-    virtual void keyPressEvent( QKeyEvent* ) override;
+    bool event( QEvent* ) override;
+    void keyPressEvent( QKeyEvent* ) override;
 
-private:
+  private:
     class PrivateData;
     std::unique_ptr< PrivateData > m_data;
 };

@@ -5,25 +5,30 @@
 
 #include "QskAnimator.h"
 
-#include <QObject>
-#include <QVector>
-#include <QQuickWindow>
-#include <QElapsedTimer>
-#include <QGlobalStatic>
-#include <QDebug>
+#include <qelapsedtimer.h>
+#include <qglobalstatic.h>
+#include <qobject.h>
+#include <qquickwindow.h>
+#include <qvector.h>
+
+#include <cmath>
+
+#ifndef QT_NO_DEBUG_STREAM
+#include <qdebug.h>
+#endif
 
 namespace
 {
     class Statistics
     {
-    public:
+      public:
         inline Statistics()
         {
             reset();
         }
 
 #ifndef QT_NO_DEBUG_STREAM
-        void debugStatistics( QDebug debug ) 
+        void debugStatistics( QDebug debug )
         {
             QDebugStateSaver saver( debug );
             debug.nospace();
@@ -61,8 +66,6 @@ namespace
         int current;
         int maximum;
     };
-
-    static Statistics qskStatistics;
 }
 
 /*
@@ -74,7 +77,7 @@ class QskAnimatorDriver final : public QObject
 {
     Q_OBJECT
 
-public:
+  public:
     QskAnimatorDriver();
 
     void registerAnimator( QskAnimator* );
@@ -82,11 +85,11 @@ public:
 
     qint64 referenceTime() const;
 
-Q_SIGNALS:
+  Q_SIGNALS:
     void advanced( QQuickWindow* );
     void terminated( QQuickWindow* );
 
-private:
+  private:
     void advanceAnimators( QQuickWindow* );
     void removeWindow( QQuickWindow* );
     void scheduleUpdate( QQuickWindow* );
@@ -105,8 +108,8 @@ private:
     mutable int m_index; // current value, when iterating
 };
 
-QskAnimatorDriver::QskAnimatorDriver():
-    m_index( -1 )
+QskAnimatorDriver::QskAnimatorDriver()
+    : m_index( -1 )
 {
     m_referenceTime.start();
 }
@@ -134,21 +137,23 @@ void QskAnimatorDriver::registerAnimator( QskAnimator* animator )
 
     m_animators.insert( it, animator );
 
-    QQuickWindow* window = animator->window();
-    if ( window )
+    if ( auto window = animator->window() )
     {
         if ( !m_windows.contains( window ) )
         {
             m_windows += window;
 
             connect( window, &QQuickWindow::afterAnimating,
-                this, [ = ]() { advanceAnimators( window ); } );
+                this, [ this, window ]() { advanceAnimators( window ); } );
 
             connect( window, &QQuickWindow::frameSwapped,
-                this, [ = ]() { scheduleUpdate( window ); } );
+                this, [ this, window ]() { scheduleUpdate( window ); } );
+
+            connect( window, &QWindow::visibleChanged,
+                this, [ this, window ]( bool on ) { if ( !on ) removeWindow( window ); } );
 
             connect( window, &QObject::destroyed,
-                this, [ = ]( QObject* ) { removeWindow( window ); } );
+                this, [ this, window ]( QObject* ) { removeWindow( window ); } );
 
             window->update();
         }
@@ -168,7 +173,7 @@ void QskAnimatorDriver::removeWindow( QQuickWindow* window )
 
     for ( auto it = m_animators.begin(); it != m_animators.end(); )
     {
-        if ( (*it)->window() == window )
+        if ( ( *it )->window() == window )
             it = m_animators.erase( it );
         else
             ++it;
@@ -197,7 +202,7 @@ void QskAnimatorDriver::advanceAnimators( QQuickWindow* window )
         // Advancing animators might create/remove animators, what is handled by
         // adjusting m_index in register/unregister
 
-        QskAnimator* animator = m_animators[m_index];
+        auto animator = m_animators[ m_index ];
         if ( animator->window() == window )
         {
             hasAnimators = true;
@@ -212,7 +217,7 @@ void QskAnimatorDriver::advanceAnimators( QQuickWindow* window )
         }
     }
 
-    m_index = -1; 
+    m_index = -1;
 
     if ( !hasAnimators )
     {
@@ -227,13 +232,15 @@ void QskAnimatorDriver::advanceAnimators( QQuickWindow* window )
 }
 
 Q_GLOBAL_STATIC( QskAnimatorDriver, qskAnimatorDriver )
+Q_GLOBAL_STATIC( Statistics, qskStatistics )
 
-QskAnimator::QskAnimator():
-    m_window( nullptr ),
-    m_duration( 200 ),
-    m_startTime( -1 )
+QskAnimator::QskAnimator()
+    : m_window( nullptr )
+    , m_duration( 200 )
+    , m_startTime( -1 )
 {
-    qskStatistics.increment();
+    if ( qskStatistics )
+        qskStatistics->increment();
 }
 
 QskAnimator::~QskAnimator()
@@ -241,7 +248,8 @@ QskAnimator::~QskAnimator()
     if ( qskAnimatorDriver )
         qskAnimatorDriver->unregisterAnimator( this );
 
-    qskStatistics.decrement();
+    if ( qskStatistics )
+        qskStatistics->decrement();
 }
 
 QQuickWindow* QskAnimator::window() const
@@ -258,6 +266,11 @@ void QskAnimator::setWindow( QQuickWindow* window )
     }
 }
 
+void QskAnimator::setAutoRepeat( bool on )
+{
+    m_autoRepeat = on;
+}
+
 void QskAnimator::setDuration( int ms )
 {
     m_duration = ms;
@@ -272,7 +285,7 @@ void QskAnimator::setEasingCurve( QEasingCurve::Type type )
 
         static QEasingCurve curveTable[ QEasingCurve::Custom ];
         if ( curveTable[ type ].type() != type )
-            curveTable[ type ].setType( type ); 
+            curveTable[ type ].setType( type );
 
         m_easingCurve = curveTable[ type ];
     }
@@ -292,7 +305,7 @@ const QEasingCurve& QskAnimator::easingCurve() const
     return m_easingCurve;
 }
 
-int QskAnimator::elapsed() const
+qint64 QskAnimator::elapsed() const
 {
     if ( !isRunning() )
         return -1;
@@ -306,7 +319,7 @@ void QskAnimator::start()
     if ( isRunning() )
         return;
 
-    if ( QskAnimatorDriver* driver = qskAnimatorDriver )
+    if ( auto driver = qskAnimatorDriver )
     {
         driver->registerAnimator( this );
         m_startTime = driver->referenceTime();
@@ -320,7 +333,7 @@ void QskAnimator::stop()
     if ( !isRunning() )
         return;
 
-    if ( QskAnimatorDriver* driver = qskAnimatorDriver )
+    if ( auto driver = qskAnimatorDriver )
         driver->unregisterAnimator( this );
 
     m_startTime = -1;
@@ -334,14 +347,25 @@ void QskAnimator::update()
 
     const qint64 driverTime = qskAnimatorDriver->referenceTime();
 
-    double progress = ( driverTime - m_startTime ) / double( m_duration );
-    if ( progress > 1.0 )
-        progress = 1.0;
+    if ( m_autoRepeat )
+    {
+        double progress = std::fmod( driverTime - m_startTime, m_duration );
+        progress /= m_duration;
 
-    advance( m_easingCurve.valueForProgress( progress ) );
+        advance( m_easingCurve.valueForProgress( progress ) );
+    }
+    else
+    {
+        double progress = ( driverTime - m_startTime ) / double( m_duration );
 
-    if ( progress >= 1.0 )
-        stop();
+        if ( progress > 1.0 )
+            progress = 1.0;
+
+        advance( m_easingCurve.valueForProgress( progress ) );
+
+        if ( progress >= 1.0 )
+            stop();
+    }
 }
 
 void QskAnimator::setup()
@@ -354,25 +378,30 @@ void QskAnimator::done()
     // nop
 }
 
-QMetaObject::Connection QskAnimator::addCleanupHandler( QObject* receiver,
-    const char* method, Qt::ConnectionType type )
+#if 1
+// we should also have functor based callbacks. TODO ...
+#endif
+
+QMetaObject::Connection QskAnimator::addCleanupHandler(
+    QObject* receiver, const char* method, Qt::ConnectionType type )
 {
     return QObject::connect( qskAnimatorDriver,
-        SIGNAL( terminated( QQuickWindow* ) ), receiver, method, type );
+        SIGNAL(terminated(QQuickWindow*)), receiver, method, type );
 }
 
-QMetaObject::Connection QskAnimator::addAdvanceHandler( QObject* receiver,
-    const char* method, Qt::ConnectionType type )
-{   
+QMetaObject::Connection QskAnimator::addAdvanceHandler(
+    QObject* receiver, const char* method, Qt::ConnectionType type )
+{
     return QObject::connect( qskAnimatorDriver,
-        SIGNAL( advanced( QQuickWindow* ) ), receiver, method, type );
+        SIGNAL(advanced(QQuickWindow*)), receiver, method, type );
 }
 
 #ifndef QT_NO_DEBUG_STREAM
 
-void QskAnimator::debugStatistics( QDebug debug ) 
+void QskAnimator::debugStatistics( QDebug debug )
 {
-    qskStatistics.debugStatistics( debug );
+    if ( qskStatistics )
+        qskStatistics->debugStatistics( debug );
 }
 
 #endif

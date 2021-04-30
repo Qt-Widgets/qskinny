@@ -6,7 +6,6 @@
 #ifndef QSK_LIST_VIEW_SKINLET_H
 #define QSK_LIST_VIEW_SKINLET_H
 
-#include "QskGlobal.h"
 #include "QskScrollViewSkinlet.h"
 
 class QskListView;
@@ -24,28 +23,31 @@ class QSK_EXPORT QskListViewSkinlet : public QskScrollViewSkinlet
 
     using Inherited = QskScrollViewSkinlet;
 
-public:
+  public:
     Q_INVOKABLE QskListViewSkinlet( QskSkin* = nullptr );
-    virtual ~QskListViewSkinlet();
+    ~QskListViewSkinlet() override;
 
-protected:
+    QSizeF sizeHint( const QskSkinnable*,
+        Qt::SizeHint, const QSizeF& ) const override;
+
+  protected:
     enum NodeRole
     {
         TextRole,
         GraphicRole
     };
 
-    virtual QSGNode* updateContentsNode(
+    QSGNode* updateContentsNode(
         const QskScrollView*, QSGNode* ) const override;
 
     virtual QSGNode* updateCellNode( const QskListView*,
         QSGNode*, const QRectF&, int row, int col ) const;
 
-private:
+  private:
     void updateForegroundNodes( const QskListView*, QskListViewNode* ) const;
     void updateBackgroundNodes( const QskListView*, QskListViewNode* ) const;
 
-    void updateVisisbleForegroundNodes(
+    void updateVisibleForegroundNodes(
         const QskListView*, QskListViewNode*,
         int rowMin, int rowMax, int colMin, int colMax,
         const QMarginsF& margin, bool forward ) const;

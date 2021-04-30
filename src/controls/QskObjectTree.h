@@ -6,17 +6,18 @@
 #ifndef QSK_OBJECT_TREE_H
 #define QSK_OBJECT_TREE_H 1
 
-#include "QskGlobal.h"
 #include "QskControl.h"
 #include "QskWindow.h"
 
-#include <QVariant>
+#include <qvariant.h>
 
 namespace QskObjectTree
 {
     class Visitor
     {
-    public:
+      public:
+        virtual ~Visitor() = default;
+
         virtual bool visitDown( QObject* object ) = 0;
         virtual bool visitUp( const QObject* object ) = 0;
     };
@@ -31,9 +32,9 @@ namespace QskObjectTree
     template< class T >
     class ResolveVisitor : public Visitor
     {
-    public:
-        ResolveVisitor( const char* propertyName ):
-            m_propertyName( propertyName )
+      public:
+        ResolveVisitor( const char* propertyName )
+            : m_propertyName( propertyName )
         {
         }
 
@@ -47,29 +48,29 @@ namespace QskObjectTree
             m_value = value;
         }
 
-        virtual bool visitDown( QObject* object ) override final
+        bool visitDown( QObject* object ) override final
         {
-            if ( QskControl* control = qobject_cast< QskControl* >( object ) )
+            if ( auto control = qobject_cast< QskControl* >( object ) )
                 return setImplicitValue( control, m_value );
 
-            if ( QskWindow* window = qobject_cast< QskWindow* >( object ) )
-                return setImplicitValue( window,  m_value );
+            if ( auto window = qobject_cast< QskWindow* >( object ) )
+                return setImplicitValue( window, m_value );
 
             return !setProperty( object, m_propertyName.constData(), m_value );
         }
 
-        virtual bool visitUp( const QObject* object ) override final
+        bool visitUp( const QObject* object ) override final
         {
             if ( isRoot( object ) )
                 return true;
 
-            if ( const QskControl* control = qobject_cast< const QskControl* >( object ) )
+            if ( auto control = qobject_cast< const QskControl* >( object ) )
             {
                 m_value = value( control );
                 return true;
             }
 
-            if ( const QskWindow* window = qobject_cast< const QskWindow* >( object ) )
+            if ( auto window = qobject_cast< const QskWindow* >( object ) )
             {
                 m_value = value( window );
                 return true;
@@ -78,9 +79,9 @@ namespace QskObjectTree
             return getProperty( object, m_propertyName, m_value );
         }
 
-    private:
-        inline bool getProperty(
-            const QObject* object, const char* name, T& value ) const
+      private:
+        inline bool getProperty( const QObject* object,
+            const char* name, T& value ) const
         {
             if ( !m_propertyName.isEmpty() )
             {
@@ -95,8 +96,8 @@ namespace QskObjectTree
             return false;
         }
 
-        inline bool setProperty(
-            QObject* object, const char* name, const T& value ) const
+        inline bool setProperty( QObject* object,
+            const char* name, const T& value ) const
         {
             T oldValue;
             if ( !getProperty( object, name, oldValue ) || oldValue == value )
@@ -112,11 +113,10 @@ namespace QskObjectTree
         virtual T value( const QskControl* ) const = 0;
         virtual T value( const QskWindow* ) const = 0;
 
-    private:
+      private:
         const QByteArray m_propertyName;
         T m_value;
     };
 }
 
 #endif
-

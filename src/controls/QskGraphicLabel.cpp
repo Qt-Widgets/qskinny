@@ -4,27 +4,24 @@
  *****************************************************************************/
 
 #include "QskGraphicLabel.h"
+#include "QskAspect.h"
+#include "QskColorFilter.h"
 #include "QskGraphic.h"
 #include "QskGraphicProvider.h"
-#include "QskGraphicTextureFactory.h"
-#include "QskAspect.h"
 #include "QskSetup.h"
 #include "QskSkin.h"
-
-#include <QtMath>
 
 QSK_SUBCONTROL( QskGraphicLabel, Graphic )
 
 class QskGraphicLabel::PrivateData
 {
-public:
-    PrivateData( const QUrl& sourceUrl ):
-        source( sourceUrl ),
-        sourceSize( -1, -1 ),
-        alignment( Qt::AlignLeft | Qt::AlignVCenter ),
-        fillMode( QskGraphicLabel::PreserveAspectFit ),
-        mirror( false ),
-        isSourceDirty( !sourceUrl.isEmpty() )
+  public:
+    PrivateData( const QUrl& sourceUrl )
+        : source( sourceUrl )
+        , sourceSize( -1, -1 )
+        , fillMode( QskGraphicLabel::PreserveAspectFit )
+        , mirror( false )
+        , isSourceDirty( !sourceUrl.isEmpty() )
     {
     }
 
@@ -33,35 +30,33 @@ public:
 
     QskGraphic graphic;
 
-    Qt::Alignment alignment;
-
     uint fillMode : 2;
     bool mirror : 1;
     bool isSourceDirty : 1;
 };
 
-QskGraphicLabel::QskGraphicLabel( const QUrl& source, QQuickItem* parent ):
-    Inherited( parent ),
-    m_data( new PrivateData( source ) )
+QskGraphicLabel::QskGraphicLabel( const QUrl& source, QQuickItem* parent )
+    : Inherited( parent )
+    , m_data( new PrivateData( source ) )
 {
-    setSizePolicy( QskSizePolicy::Expanding, QskSizePolicy::Expanding );
+    initSizePolicy( QskSizePolicy::Expanding, QskSizePolicy::Expanding );
 
     if ( !m_data->source.isEmpty() )
         polish();
 }
 
-QskGraphicLabel::QskGraphicLabel( QQuickItem* parent ):
-    QskGraphicLabel( QUrl(), parent )
+QskGraphicLabel::QskGraphicLabel( QQuickItem* parent )
+    : QskGraphicLabel( QUrl(), parent )
 {
 }
 
-QskGraphicLabel::QskGraphicLabel( const QString& source, QQuickItem* parent ):
-    QskGraphicLabel( QUrl( source ), parent )
+QskGraphicLabel::QskGraphicLabel( const QString& source, QQuickItem* parent )
+    : QskGraphicLabel( QUrl( source ), parent )
 {
 }
 
-QskGraphicLabel::QskGraphicLabel( const QskGraphic& graphic, QQuickItem* parent ):
-    QskGraphicLabel( parent )
+QskGraphicLabel::QskGraphicLabel( const QskGraphic& graphic, QQuickItem* parent )
+    : QskGraphicLabel( parent )
 {
     m_data->graphic = graphic;
 }
@@ -78,6 +73,11 @@ bool QskGraphicLabel::isEmpty() const
 QUrl QskGraphicLabel::source() const
 {
     return m_data->source;
+}
+
+void QskGraphicLabel::setSource( const QString& source )
+{
+    setSource( QUrl( source ) );
 }
 
 void QskGraphicLabel::setSource( const QUrl& url )
@@ -105,9 +105,14 @@ void QskGraphicLabel::setGraphic( const QskGraphic& graphic )
 {
     if ( m_data->graphic != graphic )
     {
+        const bool keepImplicitSize = m_data->sourceSize.isValid()
+            || ( m_data->graphic.defaultSize() == graphic.defaultSize() );
+
         m_data->graphic = graphic;
 
-        resetImplicitSize();
+        if ( !keepImplicitSize )
+            resetImplicitSize();
+
         update();
     }
 
@@ -119,6 +124,23 @@ void QskGraphicLabel::setGraphic( const QskGraphic& graphic )
         m_data->source.clear();
         Q_EMIT sourceChanged();
     }
+}
+
+void QskGraphicLabel::setGraphicRole( int role )
+{
+    if ( setGraphicRoleHint( Graphic, role ) )
+        Q_EMIT graphicRoleChanged( role );
+}
+
+void QskGraphicLabel::resetGraphicRole()
+{
+    if ( resetGraphicRoleHint( Graphic ) )
+        Q_EMIT graphicRoleChanged( graphicRoleHint( Graphic ) );
+}
+
+int QskGraphicLabel::graphicRole() const
+{
+    return graphicRoleHint( Graphic );
 }
 
 QskColorFilter QskGraphicLabel::graphicFilter() const
@@ -187,7 +209,7 @@ void QskGraphicLabel::setFillMode( FillMode mode )
         if ( !m_data->graphic.isEmpty() )
             update();
 
-        Q_EMIT fillModeChanged();
+        Q_EMIT fillModeChanged( mode );
     }
 }
 
@@ -196,22 +218,21 @@ QskGraphicLabel::FillMode QskGraphicLabel::fillMode() const
     return static_cast< QskGraphicLabel::FillMode >( m_data->fillMode );
 }
 
-Qt::Alignment QskGraphicLabel::alignment() const
-{
-    return m_data->alignment;
-}
-
 void QskGraphicLabel::setAlignment( Qt::Alignment alignment )
 {
-    if ( alignment != m_data->alignment )
-    {
-        m_data->alignment = alignment;
+    if ( setAlignmentHint( Graphic, alignment ) )
+        Q_EMIT alignmentChanged( alignment );
+}
 
-        if ( !( m_data->sourceSize.isEmpty() || m_data->graphic.isEmpty() ) )
-            update();
+void QskGraphicLabel::resetAlignment()
+{
+    if ( resetAlignmentHint( Graphic ) )
+        Q_EMIT alignmentChanged( alignment() );
+}
 
-        Q_EMIT alignmentChanged();
-    }
+Qt::Alignment QskGraphicLabel::alignment() const
+{
+    return alignmentHint( Graphic, Qt::AlignLeft | Qt::AlignVCenter );
 }
 
 QskGraphic QskGraphicLabel::loadSource( const QUrl& url ) const
@@ -219,7 +240,7 @@ QskGraphic QskGraphicLabel::loadSource( const QUrl& url ) const
     return Qsk::loadGraphic( url );
 }
 
-void QskGraphicLabel::updateLayout()
+void QskGraphicLabel::updateResources()
 {
     if ( !m_data->source.isEmpty() && m_data->isSourceDirty )
         m_data->graphic = loadSource( m_data->source );
@@ -227,32 +248,9 @@ void QskGraphicLabel::updateLayout()
     m_data->isSourceDirty = false;
 }
 
-qreal QskGraphicLabel::heightForWidth( qreal width ) const
-{
-    const QSizeF sz = effectiveSourceSize();
-    if ( sz.isEmpty() )
-        return 0;
-
-    return sz.height() * width / sz.width();
-}
-
-qreal QskGraphicLabel::widthForHeight( qreal height ) const
-{
-    const QSizeF sz = effectiveSourceSize();
-    if ( sz.isEmpty() )
-        return 0;
-
-    return sz.width() * height / sz.height();
-}
-
-QSizeF QskGraphicLabel::contentsSizeHint() const
-{
-    return effectiveSourceSize();
-}
-
 QSizeF QskGraphicLabel::effectiveSourceSize() const
 {
-    const QSizeF& sourceSize = m_data->sourceSize;
+    const auto& sourceSize = m_data->sourceSize;
 
     if ( sourceSize.width() >= 0 && sourceSize.height() >= 0 )
     {

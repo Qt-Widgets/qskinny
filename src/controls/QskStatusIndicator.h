@@ -6,7 +6,6 @@
 #ifndef QSK_STATUS_INDICATOR_H
 #define QSK_STATUS_INDICATOR_H
 
-#include "QskGlobal.h"
 #include "QskControl.h"
 
 class QskGraphic;
@@ -18,14 +17,16 @@ class QSK_EXPORT QskStatusIndicator : public QskControl
     Q_OBJECT
 
     Q_PROPERTY( int status READ status() WRITE setStatus NOTIFY statusChanged )
+    Q_PROPERTY( int graphicRole READ graphicRole
+        WRITE setGraphicRole RESET resetGraphicRole NOTIFY graphicRoleChanged )
 
     using Inherited = QskControl;
 
-public:
+  public:
     QSK_SUBCONTROLS( Graphic )
 
     QskStatusIndicator( QQuickItem* parent = nullptr );
-    virtual ~QskStatusIndicator();
+    ~QskStatusIndicator() override;
 
     Q_INVOKABLE QUrl source( int status ) const;
     Q_INVOKABLE void setSource( int status, const QUrl& url );
@@ -33,30 +34,30 @@ public:
     QskGraphic graphic( int status ) const;
     void setGraphic( int status, const QskGraphic& );
 
+    void setGraphicRole( int role );
+    void resetGraphicRole();
+    int graphicRole() const;
+
     virtual QskColorFilter graphicFilter( int status ) const;
     virtual QskGraphic loadSource( const QUrl& ) const;
-
-    virtual qreal heightForWidth( qreal width ) const override;
-    virtual qreal widthForHeight( qreal height ) const override;
-
-    virtual QSizeF contentsSizeHint() const override;
 
     int status() const;
     bool hasStatus( int status ) const;
 
-public Q_SLOTS:
+    QList<int> statusList() const;
+
+  public Q_SLOTS:
     void setStatus( int status );
 
-Q_SIGNALS:
+  Q_SIGNALS:
     void statusChanged( int status );
+    void graphicRoleChanged( int );
 
-protected:
-    virtual void changeEvent( QEvent* ) override;
-    virtual void updateLayout() override;
+  protected:
+    void changeEvent( QEvent* ) override;
+    void updateLayout() override;
 
-private:
-    qreal sizeConstraint( Qt::Orientation, qreal ) const;
-
+  private:
     class PrivateData;
     std::unique_ptr< PrivateData > m_data;
 };

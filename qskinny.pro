@@ -1,13 +1,14 @@
-include( qskconfig.pri )
-
 TEMPLATE = subdirs
 
 SUBDIRS = \
     src \
+    skins \
     inputcontext \
+    qmlexport \
     tools \
     support \
-    examples
+    examples \
+    playground
 
 OTHER_FILES = \
     doc/Doxyfile \
@@ -17,7 +18,9 @@ OTHER_FILES = \
     doc/classes/*.metadox \
     TODO
 
+qmlexport.depends = src
 inputcontext.depends = src
-tools.depends = src
-support.depends = src
-examples.depends = tools support
+skins.depends = src
+support.depends = src skins
+examples.depends = tools support skins qmlexport
+playground.depends = tools support skins qmlexport

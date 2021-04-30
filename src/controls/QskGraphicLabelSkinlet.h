@@ -6,7 +6,6 @@
 #ifndef QSK_GRAPHIC_LABEL_SKINLET_H
 #define QSK_GRAPHIC_LABEL_SKINLET_H
 
-#include "QskGlobal.h"
 #include "QskSkinlet.h"
 
 class QskGraphicLabel;
@@ -17,26 +16,28 @@ class QSK_EXPORT QskGraphicLabelSkinlet : public QskSkinlet
 
     using Inherited = QskSkinlet;
 
-public:
+  public:
     enum NodeRole
     {
         GraphicRole
     };
 
     Q_INVOKABLE QskGraphicLabelSkinlet( QskSkin* = nullptr );
-    virtual ~QskGraphicLabelSkinlet();
+    ~QskGraphicLabelSkinlet() override;
 
-    virtual QRectF subControlRect( const QskSkinnable*,
-        QskAspect::Subcontrol ) const override;
+    QRectF subControlRect( const QskSkinnable*,
+        const QRectF&, QskAspect::Subcontrol ) const override;
 
-protected:
-    virtual QSGNode* updateSubNode(
-        const QskSkinnable*, quint8 nodeRole, QSGNode* ) const override;
+    QSizeF sizeHint( const QskSkinnable*,
+        Qt::SizeHint, const QSizeF& ) const override;
 
-private:
-    QRect graphicRect( const QskGraphicLabel* ) const;
+  protected:
+    QSGNode* updateSubNode( const QskSkinnable*,
+        quint8 nodeRole, QSGNode* ) const override;
+
+  private:
+    QRect graphicRect( const QskGraphicLabel*, const QRectF& ) const;
     QSGNode* updateGraphicNode( const QskGraphicLabel*, QSGNode* ) const;
 };
 
 #endif
-

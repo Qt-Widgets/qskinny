@@ -6,9 +6,9 @@
 #include "QskColorFilter.h"
 #include "QskRgbValue.h"
 
-#include <QPen>
-#include <QBrush>
-#include <QDebug>
+#include <qbrush.h>
+#include <qpen.h>
+#include <qvariant.h>
 
 static inline QRgb qskSubstitutedRgb(
     const QVector< QPair< QRgb, QRgb > >& substitions, QRgb rgba )
@@ -16,14 +16,14 @@ static inline QRgb qskSubstitutedRgb(
     // usually we have 2-3 substitutions, so we can simply iterate
     // and don't need to introduce some sort of sorting or search index
 
-    const QRgb rgb = rgba | QskRgbValue::AlphaMask;
+    const QRgb rgb = rgba | QskRgb::AlphaMask;
 
-    for ( const auto s : substitions )
+    for ( const auto& s : substitions )
     {
         if ( rgb == s.first )
         {
-            return ( s.second & QskRgbValue::ColorMask )
-                | ( rgba & QskRgbValue::AlphaMask );
+            return ( s.second & QskRgb::ColorMask ) |
+                ( rgba & QskRgb::AlphaMask );
         }
     }
 
@@ -47,12 +47,12 @@ static inline QBrush qskSubstitutedBrush(
         bool isModified = false;
 
         QGradientStops stops = gradient->stops();
-        for ( int i = 0; i < stops.size(); i++ )
+        for ( auto& stop : stops )
         {
-            const QColor c = qskSubstitutedColor( substitions, stops[i].second );
-            if ( c != stops[i].second )
+            const QColor c = qskSubstitutedColor( substitions, stop.second );
+            if ( c != stop.second )
             {
-                stops[i].second = c;
+                stop.second = c;
                 isModified = true;
             }
         }
@@ -79,7 +79,7 @@ static inline QBrush qskSubstitutedBrush(
 }
 
 static inline QskColorFilter qskInterpolatedFilter(
-    const QskColorFilter &from, const QskColorFilter &to, qreal progress )
+    const QskColorFilter& from, const QskColorFilter& to, qreal progress )
 {
     if ( progress <= 0.0 )
         return from;
@@ -92,7 +92,7 @@ static inline QskColorFilter qskInterpolatedFilter(
 
     QskColorFilter interpolated;
 
-    for ( const auto pairTo : to.substitutions() )
+    for ( const auto& pairTo : to.substitutions() )
     {
         QRgb rgb = pairTo.first;
 
@@ -105,9 +105,9 @@ static inline QskColorFilter qskInterpolatedFilter(
             }
         }
 
-        rgb = QskRgbValue::interpolated( rgb, pairTo.second, progress );
+        rgb = QskRgb::interpolated( rgb, pairTo.second, progress );
 
-        if ( rgb != pairTo.second )
+        if ( rgb != pairTo.first )
             interpolated.addColorSubstitution( pairTo.first, rgb );
     }
 
@@ -117,11 +117,11 @@ static inline QskColorFilter qskInterpolatedFilter(
         of the substitution in from.
      */
 
-    for ( const auto pairFrom : from.substitutions() )
+    for ( const auto& pairFrom : from.substitutions() )
     {
         bool hasRgb = false;
 
-        for ( const auto pairTo : to.substitutions() )
+        for ( const auto& pairTo : to.substitutions() )
         {
             if ( pairTo.first == pairFrom.first )
             {
@@ -132,8 +132,8 @@ static inline QskColorFilter qskInterpolatedFilter(
 
         if ( !hasRgb )
         {
-            const auto rgb = QskRgbValue::interpolated(
-                    pairFrom.second, pairFrom.first, progress );
+            const auto rgb = QskRgb::interpolated(
+                pairFrom.second, pairFrom.first, progress );
 
             if ( rgb != pairFrom.first )
                 interpolated.addColorSubstitution( pairFrom.first, rgb );
@@ -143,21 +143,13 @@ static inline QskColorFilter qskInterpolatedFilter(
     return interpolated;
 }
 
-QskColorFilter::QskColorFilter()
-{
-}
-
-QskColorFilter::~QskColorFilter()
-{
-}
-
 void QskColorFilter::addColorSubstitution( QRgb from, QRgb to )
 {
-    for ( int i = 0; i < m_substitutions.size(); i++ )
+    for ( auto& substitution : m_substitutions )
     {
-        if ( m_substitutions[i].first == from )
+        if ( substitution.first == from )
         {
-            m_substitutions[i].second = to;
+            substitution.second = to;
             return;
         }
     }
@@ -203,40 +195,33 @@ QRgb QskColorFilter::substituted( const QRgb& rgb ) const
     return qskSubstitutedRgb( m_substitutions, rgb );
 }
 
-bool QskColorFilter::operator==( const QskColorFilter& other ) const
-{
-    // what about having the same substitutions, but in different order ???
-    return ( m_substitutions == other.m_substitutions );
-}
-
 QskColorFilter QskColorFilter::interpolated(
     const QskColorFilter& other, qreal progress ) const
 {
     return qskInterpolatedFilter( *this, other, progress );
 }
 
-QVariant QskColorFilter::interpolate( const QskColorFilter &from,
-    const QskColorFilter &to, qreal progress )
+QVariant QskColorFilter::interpolate(
+    const QskColorFilter& from, const QskColorFilter& to, qreal progress )
 {
     return QVariant::fromValue( qskInterpolatedFilter( from, to, progress ) );
 }
 
 #ifndef QT_NO_DEBUG_STREAM
 
+#include <qdebug.h>
+
 QDebug operator<<( QDebug debug, const QskColorFilter& filter )
 {
-    const QVector< QPair< QRgb, QRgb > >& s = filter.substitutions();
-
     QDebugStateSaver saver( debug );
     debug.nospace();
 
     debug << "Filter" << '(';
-    for ( int i = 0; i < s.count(); i++ )
-        debug << '[' << s[i].first << "->" << s[i].second << "]";
+    for ( const auto& s : filter.substitutions() )
+        debug << '[' << s.first << "->" << s.second << "]";
     debug << ')';
 
     return debug;
 }
 
 #endif
-

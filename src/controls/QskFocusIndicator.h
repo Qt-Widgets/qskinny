@@ -14,25 +14,32 @@ class QSK_EXPORT QskFocusIndicator : public QskControl
 
     using Inherited = QskControl;
 
-public:
+  public:
     QSK_SUBCONTROLS( Panel )
 
     QskFocusIndicator( QQuickItem* parent = nullptr );
-    virtual ~QskFocusIndicator();
+    ~QskFocusIndicator() override;
 
-protected:
-    virtual void windowChangeEvent( QskWindowChangeEvent* ) override;
+    bool contains( const QPointF& ) const override;
+    QRectF clipRect() const override;
 
-private Q_SLOTS:
-    void updateFocusFrame();
-    void onFocusItemChanged();
+  protected:
+    void windowChangeEvent( QskWindowChangeEvent* ) override;
+    virtual QRectF focusRect() const;
+
+  private:
     void onFocusItemGeometryChanged();
+    void onWindowSizeChanged( int );
 
-private:
-    QRectF focusRect() const;
+    void onFocusItemChanged();
+    void onFocusItemDestroyed();
+    void updateFocusFrame();
 
-    void resetConnections();
-    void connectWindow( const QQuickWindow*, bool );
+    void connectWindow( const QQuickWindow*, bool on );
+    QVector< QMetaObject::Connection > connectItem( const QQuickItem* );
+
+    class PrivateData;
+    std::unique_ptr< PrivateData > m_data;
 };
 
 #endif

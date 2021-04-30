@@ -7,8 +7,9 @@
 #define QSK_ANIMATOR_H
 
 #include "QskGlobal.h"
-#include <QEasingCurve>
-#include <QMetaObject>
+
+#include <qeasingcurve.h>
+#include <qobjectdefs.h>
 
 class QQuickWindow;
 class QObject;
@@ -16,7 +17,7 @@ class QDebug;
 
 class QSK_EXPORT QskAnimator
 {
-public:
+  public:
     QskAnimator();
     virtual ~QskAnimator();
 
@@ -28,37 +29,44 @@ public:
 
     const QEasingCurve& easingCurve() const;
 
+    void setAutoRepeat( bool );
+    bool autoRepeat() const;
+
     void setDuration( int ms );
     int duration() const;
 
     bool isRunning() const;
-    int elapsed() const;
+    qint64 elapsed() const;
 
     void start();
     void stop();
     void update();
 
-    static QMetaObject::Connection addCleanupHandler( QObject* receiver,
-        const char* method, Qt::ConnectionType type = Qt::AutoConnection );
+    static QMetaObject::Connection addCleanupHandler(
+        QObject* receiver, const char* method,
+        Qt::ConnectionType type = Qt::AutoConnection );
 
-    static QMetaObject::Connection addAdvanceHandler( QObject* receiver,
-        const char* method, Qt::ConnectionType type = Qt::AutoConnection );
+    static QMetaObject::Connection addAdvanceHandler(
+        QObject* receiver, const char* method,
+        Qt::ConnectionType type = Qt::AutoConnection );
 
 #ifndef QT_NO_DEBUG_STREAM
     static void debugStatistics( QDebug );
 #endif
 
-protected:
+  protected:
     virtual void setup();
     virtual void advance( qreal value ) = 0;
     virtual void done();
 
-private:
+  private:
     QQuickWindow* m_window;
 
     int m_duration;
     QEasingCurve m_easingCurve;
     qint64 m_startTime; // quint32 might be enough
+
+    bool m_autoRepeat = false;
 };
 
 inline bool QskAnimator::isRunning() const
@@ -71,5 +79,9 @@ inline int QskAnimator::duration() const
     return m_duration;
 }
 
-#endif
+inline bool QskAnimator::autoRepeat() const
+{
+    return m_autoRepeat;
+}
 
+#endif

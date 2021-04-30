@@ -4,12 +4,13 @@
  *****************************************************************************/
 
 #ifndef QSK_SKINLET_H
-#define QSK_SKINLET_H 1
+#define QSK_SKINLET_H
 
-#include "QskGlobal.h"
 #include "QskAspect.h"
 
-#include <Qt>
+#include <qnamespace.h>
+#include <qrect.h>
+
 #include <memory>
 
 class QskSkin;
@@ -22,34 +23,53 @@ class QskTextOptions;
 
 class QSGNode;
 
-class QRectF;
-class QRect;
-class QSize;
-
 class QSK_EXPORT QskSkinlet
 {
     Q_GADGET
 
-public:
+  public:
     Q_INVOKABLE QskSkinlet( QskSkin* = nullptr );
     virtual ~QskSkinlet();
 
     QskSkin* skin() const;
 
-    void updateNode( QskSkinnable*, QSGNode* parent ) const;
-    virtual QRectF subControlRect( const QskSkinnable*, QskAspect::Subcontrol ) const;
+    virtual void updateNode( QskSkinnable*, QSGNode* parent ) const;
+
+    virtual QRectF subControlRect( const QskSkinnable*,
+        const QRectF&, QskAspect::Subcontrol ) const;
+
+    virtual QSizeF sizeHint( const QskSkinnable*,
+        Qt::SizeHint, const QSizeF& ) const;
 
     const QVector< quint8 >& nodeRoles() const;
 
     void setOwnedBySkinnable( bool on );
     bool isOwnedBySkinnable() const;
 
-    static void setNodeRole( QSGNode* node, quint8 nodeRole );
-    static quint8 nodeRole( const QSGNode* node);
+    static QSGNode* updateBoxNode( const QskSkinnable*, QSGNode*,
+        const QRectF&, QskAspect::Subcontrol );
 
-    static QSGNode* findNodeByRole( QSGNode* parent, quint8 nodeRole );
+    static QSGNode* updateBoxNode( const QskSkinnable*, QSGNode*,
+        const QRectF&, const QskGradient&, QskAspect::Subcontrol );
 
-protected:
+    static QSGNode* updateTextNode( const QskSkinnable*, QSGNode*,
+        const QRectF&, Qt::Alignment, const QString&, const QskTextOptions&,
+        QskAspect::Subcontrol );
+
+    // keeping the aspect ratio
+    static QSGNode* updateGraphicNode( const QskSkinnable*, QSGNode*,
+        const QskGraphic&, const QskColorFilter&, const QRectF&,
+        Qt::Alignment, Qt::Orientations mirrored = Qt::Orientations() );
+
+    // stretching to fit
+    static QSGNode* updateGraphicNode( const QskSkinnable*, QSGNode*,
+        const QskGraphic&, const QskColorFilter&, const QRectF&,
+        Qt::Orientations mirrored = Qt::Orientations() );
+
+    static QSGNode* updateBoxClipNode( const QskSkinnable*, QSGNode*,
+        const QRectF&, QskAspect::Subcontrol );
+
+  protected:
     void setNodeRoles( const QVector< quint8 >& );
     void appendNodeRoles( const QVector< quint8 >& );
 
@@ -65,36 +85,40 @@ protected:
     QSGNode* updateBoxNode( const QskSkinnable*, QSGNode*,
         QskAspect::Subcontrol ) const;
 
-    QSGNode* updateBoxNode( const QskSkinnable*, QSGNode*,
-        const QRectF&, QskAspect::Subcontrol, int rotation = 0 ) const;
-
-    QSGNode* updateTextNode( const QskSkinnable*, QSGNode*,
-        const QRectF&, Qt::Alignment, const QString&, const QskTextOptions&,
+    QSGNode* updateBoxClipNode( const QskSkinnable*, QSGNode*,
         QskAspect::Subcontrol ) const;
 
     QSGNode* updateTextNode( const QskSkinnable*, QSGNode*,
         const QString&, const QskTextOptions&, QskAspect::Subcontrol ) const;
 
     QSGNode* updateGraphicNode( const QskSkinnable*, QSGNode*,
-        const QskGraphic&, const QRectF& , QskAspect::Subcontrol ) const;
+        const QskGraphic&, QskAspect::Subcontrol,
+        Qt::Orientations mirrored = Qt::Orientations() ) const;
 
-    QSGNode* updateGraphicNode( const QskSkinnable*, QSGNode*,
-        const QskGraphic&, QskAspect::Subcontrol ) const;
+    void replaceChildNode( quint8 nodeRole, QSGNode* parentNode,
+        QSGNode* oldNode, QSGNode* newNode ) const;
 
-    QSGNode* updateGraphicNode( const QskSkinnable*, QSGNode*,
-        const QskGraphic&, const QskColorFilter&,
-        const QRectF&, Qt::Alignment ) const;
-
-    void insertRemoveNodes( QSGNode* parentNode,
-        QSGNode* oldNode, QSGNode* newNode, int nodeRole ) const;
-
-    virtual QskGradient backgroundGradient( const QskControl* ) const;
-
-private:
-    void insertNodeSorted( QSGNode* node, QSGNode* parentNode ) const;
-
+  private:
     class PrivateData;
     std::unique_ptr< PrivateData > m_data;
 };
+
+inline QRectF QskSkinlet::subControlRect(
+    const QskSkinnable*, const QRectF&, QskAspect::Subcontrol ) const
+{
+    return QRectF();
+}
+
+inline QSGNode* QskSkinlet::updateSubNode(
+    const QskSkinnable*, quint8, QSGNode*) const
+{
+    return nullptr;
+}
+
+inline QSizeF QskSkinlet::sizeHint(
+    const QskSkinnable*, Qt::SizeHint, const QSizeF& ) const
+{
+    return QSizeF();
+}
 
 #endif

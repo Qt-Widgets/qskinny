@@ -1,11 +1,7 @@
-include( $${PWD}/../qskconfig.pri )
-
 TEMPLATE = subdirs
 
-SUBDIRS += \
-    svg2qvg \
+qtHaveModule(svg) {
 
-doxygen {
     SUBDIRS += \
-        metadoxfilter
+        svg2qvg
 }

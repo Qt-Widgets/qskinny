@@ -6,7 +6,6 @@
 #ifndef QSK_BOX_SKINLET_H
 #define QSK_BOX_SKINLET_H
 
-#include "QskGlobal.h"
 #include "QskSkinlet.h"
 
 class QSK_EXPORT QskBoxSkinlet : public QskSkinlet
@@ -15,22 +14,24 @@ class QSK_EXPORT QskBoxSkinlet : public QskSkinlet
 
     using Inherited = QskSkinlet;
 
-public:
+  public:
     enum NodeRole
     {
         PanelRole,
     };
 
     Q_INVOKABLE QskBoxSkinlet( QskSkin* = nullptr );
-    virtual ~QskBoxSkinlet();
+    ~QskBoxSkinlet() override;
 
-    virtual QRectF subControlRect( const QskSkinnable*,
-        QskAspect::Subcontrol ) const override;
+    QRectF subControlRect( const QskSkinnable*,
+        const QRectF&, QskAspect::Subcontrol ) const override;
 
-protected:
-    virtual QSGNode* updateSubNode( const QskSkinnable*,
+    QSizeF sizeHint( const QskSkinnable*,
+        Qt::SizeHint, const QSizeF& ) const override;
+
+  protected:
+    QSGNode* updateSubNode( const QskSkinnable*,
         quint8 nodeRole, QSGNode* ) const override;
 };
 
 #endif
-

@@ -6,57 +6,31 @@
 #ifndef QSK_TEXT_RENDERER_H
 #define QSK_TEXT_RENDERER_H
 
-#include "QskGlobal.h"
 #include "QskNamespace.h"
-#include "QskTextOptions.h"
+#include <qnamespace.h>
 
-#include <QFont>
-#include <QRectF>
+class QskTextColors;
+class QskTextOptions;
 
-class QskTextHelperItem;
-
+class QString;
+class QFont;
+class QRectF;
+class QSizeF;
 class QQuickItem;
-class QQuickWindow;
 class QSGTransformNode;
-class QColor;
 
-// Hacking a QQuickTextNode using a QQuickText helper item
-// How to create the nodes in a better way needs further
-// investigations
-
-class QSK_EXPORT QskTextRenderer
+namespace QskTextRenderer
 {
-public:
-    void setFont( const QFont& font );
-    void setOptions( const QskTextOptions& );
-    void setAlignment( Qt::Alignment );
+    QSK_EXPORT void updateNode(
+        const QString&, const QFont&, const QskTextOptions&, Qsk::TextStyle,
+        const QskTextColors&, Qt::Alignment, const QRectF&,
+        const QQuickItem*, QSGTransformNode* );
 
-    void updateNode( const QQuickItem*, const QSizeF&, const QString&,
-        QSGTransformNode*, const QColor& textColor,
-        Qsk::TextStyle, const QColor& styleColor, const QColor& linkColor );
+    QSK_EXPORT QSizeF textSize(
+        const QString&, const QFont&, const QskTextOptions& );
 
-    void updateNode( const QQuickItem*, const QRectF&, const QString&,
-        QSGTransformNode*, const QColor& textColor, Qsk::TextStyle,
-        const QColor& styleColor, const QColor& linkColor );
-
-    QSizeF implicitSizeHint( const QString& ) const;
-
-    QRectF textRect( const QSizeF&, const QString& ) const;
-
-private:
-    void setupItem( QskTextHelperItem* ) const;
-
-    QFont m_font;
-    QskTextOptions m_options;
-    Qt::Alignment m_alignment;
-};
-
-inline void QskTextRenderer::updateNode( const QQuickItem* item, const QSizeF& size,
-    const QString& text, QSGTransformNode* node, const QColor& textColor,
-    Qsk::TextStyle style, const QColor& styleColor, const QColor& linkColor )
-{
-    updateNode( item, QRectF( 0, 0, size.width(), size.height() ), text, node,
-        textColor, style, styleColor, linkColor );
+    QSK_EXPORT QSizeF textSize(
+        const QString&, const QFont&, const QskTextOptions&, const QSizeF& );
 }
 
 #endif

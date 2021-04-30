@@ -5,36 +5,61 @@
 
 #include "QskAspect.h"
 
-#include <QDebug>
-#include <QMetaEnum>
-#include <QtAlgorithms>
-#include <QVector>
+#include <qalgorithms.h>
+#include <qdebug.h>
+#include <qmetaobject.h>
+#include <qvector.h>
 
-#include <limits>
 #include <bitset>
 #include <string>
 #include <unordered_map>
 
-static_assert( sizeof( QskAspect::Aspect ) == sizeof( quint64 ),
+static_assert( sizeof( QskAspect ) == sizeof( quint64 ),
     "QskAspect::Aspect has to match quint64" );
 
 namespace
 {
-    using namespace QskAspect;
     using namespace std;
 
     struct StateInfo
     {
-        State state;
+        QskAspect::State state;
         QByteArray name;
     };
 
     struct AspectRegistry
     {
         QVector< QByteArray > subControlNames;
-        unordered_map< const QMetaObject*, QVector< Subcontrol > > subControlTable;
+        unordered_map< const QMetaObject*, QVector< QskAspect::Subcontrol > > subControlTable;
         unordered_map< const QMetaObject*, QVector< StateInfo > > stateTable;
     };
+}
+
+static quint8 qskPrimitiveCount = QMetaEnum::fromType< QskAspect::Primitive >().keyCount();
+
+quint8 QskAspect::primitiveCount()
+{
+    return qskPrimitiveCount;
+}
+
+void QskAspect::reservePrimitives( quint8 count )
+{
+    // applications might need to increase the count to add additional primitives
+
+    constexpr quint8 maxCount = 1 << 5; // we have 5 bits for the primitives
+
+    Q_ASSERT( count <= maxCount );
+
+    if ( count > maxCount )
+    {
+        qWarning() << "QskAspect: having more than"
+            << maxCount << "primitives is not supported.";
+
+        count = maxCount;
+    }
+
+    if ( count > qskPrimitiveCount )
+        qskPrimitiveCount = count;
 }
 
 Q_GLOBAL_STATIC( AspectRegistry, qskAspectRegistry )
@@ -58,14 +83,15 @@ QskAspect::Subcontrol QskAspect::nextSubcontrol(
     auto& names = qskAspectRegistry->subControlNames;
     auto& hashTable = qskAspectRegistry->subControlTable;
 
-    Q_ASSERT_X( names.size() <= LastSubcontrol,
-        "QskAspect", "There are no free subcontrol aspects; please modify your"
+    Q_ASSERT_X( names.size() <= LastSubcontrol, "QskAspect",
+        "There are no free subcontrol aspects; please modify your"
         " application to declare fewer aspects, or increase the mask size of"
         " QskAspect::Subcontrol in QskAspect.h." );
 
     names += name;
 
-    const auto subControl = static_cast< Subcontrol >( names.size() - 1 );
+    // 0 is QskAspect::Control, so we have to start with 1
+    const auto subControl = static_cast< Subcontrol >( names.size() );
     hashTable[ metaObject ] += subControl;
 
     return subControl;
@@ -76,8 +102,8 @@ QByteArray QskAspect::subControlName( Subcontrol subControl )
     const auto& names = qskAspectRegistry->subControlNames;
 
     const int index = subControl;
-    if ( index >= 0 && index < names.size() )
-        return names[ index ];
+    if ( index > 0 && index < names.size() )
+        return names[ index - 1 ];
 
     return QByteArray();
 }
@@ -126,13 +152,13 @@ static QByteArray qskEnumString( const char* name, int value )
     return key ? QByteArray( key ) : QString::number( value ).toLatin1();
 }
 
-QByteArray qskStateKey( const QMetaObject* metaObject, quint16 state )
+static QByteArray qskStateKey( const QMetaObject* metaObject, quint16 state )
 {
-    auto& stateTable = qskAspectRegistry->stateTable;
+    const auto& stateTable = qskAspectRegistry->stateTable;
 
     for ( auto mo = metaObject; mo != nullptr; mo = mo->superClass() )
     {
-        auto it = stateTable.find( mo );
+        const auto it = stateTable.find( mo );
         if ( it != stateTable.end() )
         {
             for ( const auto& info : it->second )
@@ -143,7 +169,7 @@ QByteArray qskStateKey( const QMetaObject* metaObject, quint16 state )
         }
     }
 
-    return QByteArray();;
+    return QByteArray();
 }
 
 static QByteArray qskStateString(
@@ -201,60 +227,41 @@ static inline QDebug qskDebugEnum(
     return debug;
 }
 
-QDebug operator<<( QDebug debug, const QskAspect::Type& type )
+QDebug operator<<( QDebug debug, QskAspect::Type type )
 {
     return qskDebugEnum( debug, "Type", type );
 }
 
-QDebug operator<<( QDebug debug, const QskAspect::Edge& edge )
+QDebug operator<<( QDebug debug, QskAspect::Primitive primitive )
 {
-    return qskDebugEnum( debug, "Edge", edge );
+    return qskDebugEnum( debug, "Primitive", primitive );
 }
 
-QDebug operator<<( QDebug debug, const QskAspect::Corner& corner )
-{
-    return qskDebugEnum( debug, "Corner", corner );
-}
-
-QDebug operator<<( QDebug debug, const QskAspect::BoxPrimitive& primitive )
-{
-    return qskDebugEnum( debug, "BoxPrimitive", primitive );
-}
-
-QDebug operator<<( QDebug debug, const QskAspect::FlagPrimitive& primitive )
-{
-    return qskDebugEnum( debug, "FlagPrimitive", primitive );
-}
-
-QDebug operator<<( QDebug debug, const QskAspect::ColorPrimitive& primitive )
-{
-    return qskDebugEnum( debug, "ColorPrimitive", primitive );
-}
-
-QDebug operator<<( QDebug debug, const QskAspect::MetricPrimitive& primitive )
-{
-    return qskDebugEnum( debug, "MetricPrimitive", primitive );
-}
-
-QDebug operator<<( QDebug debug, const QskAspect::Subcontrol& subControl )
+QDebug operator<<( QDebug debug, QskAspect::Subcontrol subControl )
 {
     QDebugStateSaver saver( debug );
 
     debug.nospace();
     debug << "QskAspect::Subcontrol" << '(';
-    debug << subControlName( subControl );
+    debug << QskAspect::subControlName( subControl );
     debug << ')';
 
     return debug;
 }
 
-QDebug operator<<( QDebug debug, const QskAspect::State& state )
+QDebug operator<<( QDebug debug, QskAspect::Placement placement )
+{
+    qskDebugEnum( debug, "Placement", placement );
+    return debug;
+}
+
+QDebug operator<<( QDebug debug, QskAspect::State state )
 {
     qskDebugState( debug, nullptr, state );
     return debug;
 }
 
-QDebug operator<<( QDebug debug, const QskAspect::Aspect& aspect )
+QDebug operator<<( QDebug debug, QskAspect aspect )
 {
     qskDebugAspect( debug, nullptr, aspect );
     return debug;
@@ -262,7 +269,7 @@ QDebug operator<<( QDebug debug, const QskAspect::Aspect& aspect )
 
 void qskDebugState( QDebug debug, const QMetaObject* metaObject, QskAspect::State state )
 {
-    QDebugStateSaver saver(debug);
+    QDebugStateSaver saver( debug );
 
     debug.resetFormat();
     debug.noquote();
@@ -271,11 +278,9 @@ void qskDebugState( QDebug debug, const QMetaObject* metaObject, QskAspect::Stat
     debug << "QskAspect::State( " << qskStateString( metaObject, state ) << " )";
 }
 
-void qskDebugAspect( QDebug debug, const QMetaObject* metaObject, QskAspect::Aspect aspect )
+void qskDebugAspect( QDebug debug, const QMetaObject* metaObject, QskAspect aspect )
 {
-    using namespace QskAspect;
-
-    QDebugStateSaver saver(debug);
+    QDebugStateSaver saver( debug );
 
     debug.resetFormat();
     debug.noquote();
@@ -293,50 +298,29 @@ void qskDebugAspect( QDebug debug, const QMetaObject* metaObject, QskAspect::Asp
     if ( aspect.isAnimator() )
         debug << "(A)";
 
-    debug << ", ";
-
-    if ( !aspect.isBoxPrimitive() )
+    switch ( aspect.type() )
     {
-        switch( aspect.type() )
+        case QskAspect::Color:
         {
-            case Color:
-            {
-                debug << qskEnumString( "ColorPrimitive", aspect.colorPrimitive() );
-                break;
-            }
-            case Metric:
-            {
-                debug << qskEnumString( "MetricPrimitive", aspect.metricPrimitive() );
-                break;
-            }
-            default:
-            {
-                debug << qskEnumString( "FlagPrimitive", aspect.flagPrimitive() );
-            }
+            if ( aspect.colorPrimitive() != 0 )
+                debug << ", " << qskEnumString( "ColorPrimitive", aspect.colorPrimitive() );
+            break;
+        }
+        case QskAspect::Metric:
+        {
+            if ( aspect.metricPrimitive() != 0 )
+                debug << ", " << qskEnumString( "MetricPrimitive", aspect.metricPrimitive() );
+            break;
+        }
+        default:
+        {
+            if ( aspect.flagPrimitive() != 0 )
+                debug << ", " << qskEnumString( "FlagPrimitive", aspect.flagPrimitive() );
         }
     }
-    else
-    {
-        debug << qskEnumString( "BoxPrimitive", aspect.boxPrimitive() );
 
-        switch( aspect.boxPrimitive() )
-        {
-            case Margin:
-            case Padding:
-            case Border:
-            case Shadow:
-            {
-                if ( aspect.edge() )
-                    debug << ", " << qskEnumString( "Edge", aspect.edge() );
-                break;
-            }
-            default:
-            {
-                if ( aspect.corner() )
-                    debug << ", " << qskEnumString( "Corner", aspect.corner() );
-            }
-        }
-    }
+    if ( aspect.placement() != QskAspect::NoPlacement )
+        debug << ", " << qskEnumString( "Placement", aspect.placement() );
 
     if ( aspect.state() )
         debug << ", " << qskStateString( metaObject, aspect.state() );
@@ -346,7 +330,7 @@ void qskDebugAspect( QDebug debug, const QMetaObject* metaObject, QskAspect::Asp
 
 #endif
 
-const char* QskAspect::Aspect::toPrintable() const
+const char* QskAspect::toPrintable() const
 {
     QString tmp;
 
@@ -354,18 +338,18 @@ const char* QskAspect::Aspect::toPrintable() const
     debug << *this;
 
     // we should find a better impementation
-    static QByteArray bytes[10];
+    static QByteArray bytes[ 10 ];
     static int counter = 0;
 
     counter = ( counter + 1 ) % 10;
 
-    bytes[counter] = tmp.toUtf8();
-    return bytes[counter].constData();
+    bytes[ counter ] = tmp.toUtf8();
+    return bytes[ counter ].constData();
 }
 
-QskAspect::State QskAspect::Aspect::topState() const
+QskAspect::State QskAspect::topState() const noexcept
 {
-    if ( m_states == NoState )
+    if ( m_bits.states == NoState )
         return NoState;
 
     /*
@@ -373,7 +357,7 @@ QskAspect::State QskAspect::Aspect::topState() const
         _BitScanReverse - we can live with this.
      */
 
-    const auto n = qCountLeadingZeroBits( static_cast< quint16 >( m_states ) );
+    const auto n = qCountLeadingZeroBits( static_cast< quint16 >( m_bits.states ) );
     return static_cast< QskAspect::State >( 1 << ( 15 - n ) );
 }
 

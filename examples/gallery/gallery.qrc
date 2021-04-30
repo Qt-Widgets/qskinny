@@ -1,5 +1,0 @@
-<RCC>
-    <qresource prefix="/qml">
-        <file>gallery.qml</file>
-    </qresource>
-</RCC>

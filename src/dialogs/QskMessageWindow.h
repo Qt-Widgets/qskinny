@@ -6,20 +6,52 @@
 #ifndef QSK_MESSAGE_WINDOW_H
 #define QSK_MESSAGE_WINDOW_H 1
 
-#include "QskGlobal.h"
-#include "QskInputWindow.h"
+#include "QskDialogWindow.h"
 
-class QskMessageDialogBox;
+class QskTextOptions;
+class QskGraphic;
 
-class QSK_EXPORT QskMessageWindow : public QskInputWindow
+class QSK_EXPORT QskMessageWindow : public QskDialogWindow
 {
     Q_OBJECT
 
-    using Inherited = QskInputWindow;
+    Q_PROPERTY( QString text READ text
+        WRITE setText NOTIFY textChanged )
 
-public:
+    Q_PROPERTY( QskTextOptions textOptions READ textOptions
+        WRITE setTextOptions NOTIFY textOptionsChanged )
+
+    Q_PROPERTY( QUrl symbolSource READ symbolSource WRITE setSymbolSource )
+
+    using Inherited = QskDialogWindow;
+
+  public:
     QskMessageWindow( QWindow* parent = nullptr );
-    virtual ~QskMessageWindow();
+    ~QskMessageWindow() override;
+
+    void setTextOptions( const QskTextOptions& );
+    QskTextOptions textOptions() const;
+
+    QString text() const;
+
+    void setSymbolSource( const QUrl& url );
+    QUrl symbolSource() const;
+
+    void setSymbolType( int symbolType );
+
+    void setSymbol( const QskGraphic& );
+    QskGraphic symbol() const;
+
+  public Q_SLOTS:
+    void setText( const QString& );
+
+  Q_SIGNALS:
+    void textChanged( const QString& );
+    void textOptionsChanged( const QskTextOptions& );
+
+  private:
+    class PrivateData;
+    std::unique_ptr< PrivateData > m_data;
 };
 
 #endif

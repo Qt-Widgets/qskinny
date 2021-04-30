@@ -6,26 +6,23 @@
 #ifndef QSK_SKIN_H
 #define QSK_SKIN_H
 
-#include "QskGlobal.h"
 #include "QskAspect.h"
 
-#include <QObject>
-#include <QColor>
+#include <qcolor.h>
+#include <qobject.h>
 
-#include <unordered_map>
-#include <set>
 #include <memory>
 #include <type_traits>
+#include <unordered_map>
 
 class QskControl;
-class QskSkinnable;
 class QskSkinlet;
 
 class QskColorFilter;
 class QskGraphic;
 class QskGraphicProvider;
 
-class QskAnimationHint;
+class QskSkinHintTable;
 
 class QVariant;
 
@@ -35,7 +32,7 @@ class QSK_EXPORT QskSkin : public QObject
 
     using Inherited = QObject;
 
-public:
+  public:
     enum SkinFontRole
     {
         DefaultFont = 0,
@@ -50,29 +47,15 @@ public:
     Q_ENUM( SkinFontRole )
 
     QskSkin( QObject* parent = nullptr );
-    virtual ~QskSkin();
+    ~QskSkin() override;
 
-    template<typename Control, typename Skinlet> void declareSkinlet();
+    template< typename Control, typename Skinlet >
+    void declareSkinlet();
 
     virtual void resetColors( const QColor& accent );
 
-    void setColor( QskAspect::Aspect, Qt::GlobalColor );
-    void setColor( QskAspect::Aspect, QRgb );
-    void setColor( QskAspect::Aspect, const QColor& );
-
-    QColor color( QskAspect::Aspect ) const;
-    QColor baseColor() const;
-
-    void setMetric( QskAspect::Aspect, qreal metric );
-    qreal metric( QskAspect::Aspect ) const;
-
-    void setAnimation( QskAspect::Aspect, QskAnimationHint );
-    QskAnimationHint animation( QskAspect::Aspect ) const;
-
-    void setSkinHint( QskAspect::Aspect, const QVariant& hint );
-    void removeSkinHint( QskAspect::Aspect );
-
-    const QVariant& skinHint( QskAspect::Aspect ) const;
+    void setSkinHint( QskAspect, const QVariant& hint );
+    const QVariant& skinHint( QskAspect ) const;
 
     void setGraphicFilter( int graphicRole, const QskColorFilter& );
     void resetGraphicFilter( int graphicRole );
@@ -91,16 +74,20 @@ public:
     QskGraphicProvider* graphicProvider( const QString& providerId ) const;
     bool hasGraphicProvider() const;
 
-    virtual const int *dialogButtonLayout( Qt::Orientation ) const;
+    virtual const int* dialogButtonLayout( Qt::Orientation ) const;
 
-    QskSkinlet* skinlet( const QskSkinnable* );
+    void setStateMask( QskAspect::State );
+    QskAspect::State stateMask() const;
 
-    const std::set< QskAspect::Aspect >& animatorAspects( QskAspect::Subcontrol ) const;
-    const std::unordered_map< QskAspect::Aspect, QVariant >& skinHints() const;
+    QskSkinlet* skinlet( const QMetaObject* );
+
+    const QskSkinHintTable& hintTable() const;
+    QskSkinHintTable& hintTable();
+
     const std::unordered_map< int, QFont >& fonts() const;
     const std::unordered_map< int, QskColorFilter >& graphicFilters() const;
 
-private:
+  private:
     void declareSkinlet( const QMetaObject* controlMetaObject,
         const QMetaObject* skinMetaObject );
 
@@ -108,7 +95,7 @@ private:
     std::unique_ptr< PrivateData > m_data;
 };
 
-template<typename Control, typename Skinlet>
+template< typename Control, typename Skinlet >
 inline void QskSkin::declareSkinlet()
 {
     Q_STATIC_ASSERT( ( std::is_base_of< QskControl, Control >::value ) );

@@ -1,29 +1,38 @@
-QSK_ROOT = $${PWD}/../..
-include( $${QSK_ROOT}/qskconfig.pri )
-
-QSK_OUT_ROOT = $${OUT_PWD}/../..
-
 TEMPLATE     = app
+TARGET = svg2qvg
 
 QT += svg
 
-QSK_DIRS = \
-    $${QSK_ROOT}/src/common \
-    $${QSK_ROOT}/src/graphic
-
-INCLUDEPATH *= $${QSK_DIRS}
-DEPENDPATH  += $${QSK_DIRS}
+CONFIG += standalone
+CONFIG -= app_bundle
+CONFIG -= sanitize
 
 DESTDIR      = $${QSK_OUT_ROOT}/tools/bin
 
-QMAKE_RPATHDIR *= $${QSK_OUT_ROOT}/lib
-LIBS *= -L$${QSK_OUT_ROOT}/lib -lqskinny
+standalone {
 
-contains(QSK_CONFIG, QskDll) {
-    DEFINES    += QSK_DLL
-} 
+    # We only need a very small subset of QSkinny and by including the 
+    # necessary cpp files svg2qvg becomes independent from the library
 
-TARGET = svg2qvg
+    QSK_DIRS = \
+        $${QSK_ROOT}/src/common \
+        $${QSK_ROOT}/src/graphic
+
+    INCLUDEPATH *= $${QSK_DIRS}
+    DEPENDPATH  += $${QSK_DIRS}
+
+    DEFINES += QSK_STANDALONE
+    QSK_CONFIG -= QskDll
+
+    QT += gui-private
+}
+else {
+
+    CONFIG += qskinny
+}
 
 SOURCES += \
     main.cpp
+
+target.path    = $${QSK_INSTALL_BINS}
+INSTALLS       = target

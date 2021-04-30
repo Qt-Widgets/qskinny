@@ -7,15 +7,15 @@
 #define QSK_STANDARD_SYMBOL_H 1
 
 #include "QskGlobal.h"
-#include <QMetaType>
+#include <qmetatype.h>
 
 class QskGraphic;
 
-class QskStandardSymbol
+class QSK_EXPORT QskStandardSymbol
 {
     Q_GADGET
 
-public:
+  public:
     enum Type
     {
         NoSymbol = -1,

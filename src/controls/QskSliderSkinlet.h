@@ -6,7 +6,6 @@
 #ifndef QSK_SLIDER_SKINLET_H
 #define QSK_SLIDER_SKINLET_H
 
-#include "QskGlobal.h"
 #include "QskSkinlet.h"
 
 class QskSlider;
@@ -17,7 +16,7 @@ class QSK_EXPORT QskSliderSkinlet : public QskSkinlet
 
     using Inherited = QskSkinlet;
 
-public:
+  public:
     enum NodeRole
     {
         PanelRole,
@@ -27,25 +26,26 @@ public:
     };
 
     Q_INVOKABLE QskSliderSkinlet( QskSkin* = nullptr );
-    virtual ~QskSliderSkinlet();
+    ~QskSliderSkinlet() override;
 
-    virtual QRectF subControlRect( const QskSkinnable*,
-        QskAspect::Subcontrol ) const override;
+    QRectF subControlRect( const QskSkinnable*,
+        const QRectF& rect, QskAspect::Subcontrol ) const override;
 
-protected:
-    virtual QSGNode* updateSubNode( const QskSkinnable*,
+    QSizeF sizeHint( const QskSkinnable*,
+        Qt::SizeHint, const QSizeF& ) const override;
+
+  protected:
+    QSGNode* updateSubNode( const QskSkinnable*,
         quint8 nodeRole, QSGNode* ) const override;
 
-private:
-    QSGNode* updateBoxNode( const QskSlider*, QskAspect::Subcontrol, QSGNode* ) const;
+  private:
+    QRectF panelRect( const QskSlider*, const QRectF& ) const;
+    QRectF grooveRect( const QskSlider*, const QRectF& ) const;
+    QRectF fillRect( const QskSlider*, const QRectF& ) const;
+    QRectF handleRect( const QskSlider*, const QRectF& ) const;
+    QRectF scaleRect( const QskSlider*, const QRectF& ) const;
 
-    QRectF panelRect( const QskSlider* ) const;
-    QRectF grooveRect( const QskSlider* ) const;
-    QRectF fillRect( const QskSlider* ) const;
-    QRectF handleRect( const QskSlider* ) const;
-    QRectF scaleRect( const QskSlider* ) const;
-
-    QRectF innerRect( const QskSlider*, QskAspect::Subcontrol ) const;
+    QRectF innerRect( const QskSlider*, const QRectF&, QskAspect::Subcontrol ) const;
 };
 
 #endif

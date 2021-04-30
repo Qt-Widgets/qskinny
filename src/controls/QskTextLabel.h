@@ -7,8 +7,7 @@
 #define QSK_TEXT_LABEL_H
 
 #include "QskControl.h"
-
-class QskTextOptions;
+#include "QskTextOptions.h"
 
 class QSK_EXPORT QskTextLabel : public QskControl
 {
@@ -16,51 +15,81 @@ class QSK_EXPORT QskTextLabel : public QskControl
 
     Q_PROPERTY( QString text READ text WRITE setText NOTIFY textChanged )
 
+    Q_PROPERTY( int fontRole READ fontRole
+        WRITE setFontRole RESET resetFontRole NOTIFY fontRoleChanged )
+
+    Q_PROPERTY( QFont font READ font )
+
+    Q_PROPERTY( QColor textColor READ textColor
+        WRITE setTextColor RESET resetTextColor NOTIFY textColorChanged )
+
     Q_PROPERTY( QskTextOptions textOptions READ textOptions
         WRITE setTextOptions NOTIFY textOptionsChanged )
 
     Q_PROPERTY( Qt::Alignment alignment READ alignment
         WRITE setAlignment NOTIFY alignmentChanged )
 
+    Q_PROPERTY( bool panel READ hasPanel
+        WRITE setPanel NOTIFY panelChanged FINAL )
+
     using Inherited = QskControl;
 
-public:
-    QSK_SUBCONTROLS( Text )
+  public:
+    QSK_SUBCONTROLS( Panel, Text )
 
     QskTextLabel( QQuickItem* parent = nullptr );
     QskTextLabel( const QString& text, QQuickItem* parent = nullptr );
 
-    virtual ~QskTextLabel();
+    ~QskTextLabel() override;
 
     QString text() const;
+
+    void setFontRole( int role );
+    void resetFontRole();
+    int fontRole() const;
+
+    void setTextColor( const QColor& );
+    void resetTextColor();
+    QColor textColor() const;
 
     void setTextOptions( const QskTextOptions& );
     QskTextOptions textOptions() const;
 
+    void setTextFormat( QskTextOptions::TextFormat );
+    QskTextOptions::TextFormat textFormat() const;
+
+    QskTextOptions::TextFormat effectiveTextFormat() const;
+
+    void setWrapMode( QskTextOptions::WrapMode );
+    QskTextOptions::WrapMode wrapMode() const;
+
+    void setElideMode( Qt::TextElideMode );
+    Qt::TextElideMode elideMode() const;
+
     void setAlignment( Qt::Alignment );
+    void resetAlignment();
     Qt::Alignment alignment() const;
-
-    virtual QSizeF contentsSizeHint() const override;
-
-    virtual qreal heightForWidth( qreal width ) const override;
-    virtual qreal widthForHeight( qreal height ) const override;
-
-    bool isRichText() const;
 
     QFont font() const;
 
-Q_SIGNALS:
-    void textChanged( const QString& );
-    void textOptionsChanged();
-    void alignmentChanged();
+    void setPanel( bool );
+    bool hasPanel() const;
 
-public Q_SLOTS:
+  Q_SIGNALS:
+    void textChanged( const QString& );
+    void textColorChanged( const QColor& );
+    void textOptionsChanged( const QskTextOptions& );
+    void fontRoleChanged( int );
+    void alignmentChanged( Qt::Alignment );
+    void panelChanged( bool );
+
+  public Q_SLOTS:
     void setText( const QString& );
 
-protected:
-    virtual void changeEvent( QEvent* ) override;
+  protected:
+    void changeEvent( QEvent* ) override;
 
-private:
+  private:
     class PrivateData;
     std::unique_ptr< PrivateData > m_data;
 };

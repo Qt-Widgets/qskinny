@@ -8,10 +8,16 @@
 #include "QskLinearBox.h"
 #include "QskSkin.h"
 
-#include <QKeyEvent>
-#include <private/qguiapplication_p.h>
-#include <qpa/qplatformtheme.h>
+#include <qevent.h>
+#include <qpointer.h>
+#include <qvector.h>
+
 #include <qpa/qplatformdialoghelper.h>
+#include <qpa/qplatformtheme.h>
+
+QSK_QT_PRIVATE_BEGIN
+#include <private/qguiapplication_p.h>
+QSK_QT_PRIVATE_END
 
 QSK_SUBCONTROL( QskDialogButtonBox, Panel )
 
@@ -21,61 +27,56 @@ static void qskSendEventTo( QObject* object, QEvent::Type type )
     QCoreApplication::sendEvent( object, &event );
 }
 
-static inline QskDialog::ButtonRole qskButtonRole(
-    QskDialog::StandardButton standardButton )
+static inline QskDialog::ActionRole qskActionRole( QskDialog::Action action )
 {
-    QPlatformDialogHelper::StandardButton sb =
-        static_cast< QPlatformDialogHelper::StandardButton >( standardButton );
+    const auto role = QPlatformDialogHelper::buttonRole(
+        static_cast< QPlatformDialogHelper::StandardButton >( action ) );
 
-    QPlatformDialogHelper::ButtonRole role = QPlatformDialogHelper::buttonRole( sb );
-
-    return static_cast< QskDialog::ButtonRole >( role );
+    return static_cast< QskDialog::ActionRole >( role );
 }
 
-static void qskAddToLayout( const QList< QskPushButton* >& buttonList,
+static void qskAddToLayout( const QVector< QskPushButton* >& buttons,
     bool reverse, QskLinearBox* layoutBox )
 {
     if ( reverse )
     {
-        for ( int i = buttonList.count() - 1; i >= 0; i-- )
-            layoutBox->addItem( buttonList[i] );
+        for ( int i = buttons.count() - 1; i >= 0; i-- )
+            layoutBox->addItem( buttons[ i ] );
     }
     else
     {
-        for ( int i = 0; i < buttonList.count(); i++ )
-            layoutBox->addItem( buttonList[i] );
+        for ( int i = 0; i < buttons.count(); i++ )
+            layoutBox->addItem( buttons[ i ] );
     }
 }
 
 class QskDialogButtonBox::PrivateData
 {
-public:
-    PrivateData():
-        layoutBox( nullptr ),
-        centeredButtons( false ),
-        dirtyLayout( false ),
-        clickedButton( QskDialog::NoButton )
+  public:
+    PrivateData()
+        : centeredButtons( false )
+        , dirtyLayout( false )
     {
     }
 
-    QskLinearBox* layoutBox;
+    QskLinearBox* layoutBox = nullptr;
+    QVector< QskPushButton* > buttons[ QskDialog::NActionRoles ];
+    QPointer< QskPushButton > defaultButton;
 
-    QList< QskPushButton* > buttonLists[QskDialog::NButtonRoles];
+    QskDialog::Action clickedAction = QskDialog::NoAction;
 
     bool centeredButtons : 1;
     bool dirtyLayout : 1;
-
-    QskDialog::StandardButton clickedButton;
 };
 
-QskDialogButtonBox::QskDialogButtonBox( QQuickItem* parent ):
-    QskDialogButtonBox( Qt::Horizontal, parent )
+QskDialogButtonBox::QskDialogButtonBox( QQuickItem* parent )
+    : QskDialogButtonBox( Qt::Horizontal, parent )
 {
 }
 
-QskDialogButtonBox::QskDialogButtonBox( Qt::Orientation orientation, QQuickItem* parent ):
-    Inherited( parent ),
-    m_data( new PrivateData() )
+QskDialogButtonBox::QskDialogButtonBox( Qt::Orientation orientation, QQuickItem* parent )
+    : Inherited( parent )
+    , m_data( new PrivateData() )
 {
     setPolishOnResize( true );
     setOrientation( orientation );
@@ -89,17 +90,6 @@ void QskDialogButtonBox::setOrientation( Qt::Orientation orientation )
 {
     if ( m_data->layoutBox && m_data->layoutBox->orientation() == orientation )
         return;
-
-    for ( int i = 0; i < QskDialog::NButtonRoles; i++ )
-    {
-        for ( QskPushButton* button : m_data->buttonLists[i] )
-        {
-            // avoid that buttons get deleted
-            // together with the layout
-
-            button->setParent( nullptr );
-        }
-    }
 
     delete m_data->layoutBox;
 
@@ -130,7 +120,8 @@ QskAspect::Subcontrol QskDialogButtonBox::effectiveSubcontrol(
     return Inherited::effectiveSubcontrol( subControl );
 }
 
-QSizeF QskDialogButtonBox::contentsSizeHint() const
+QSizeF QskDialogButtonBox::layoutSizeHint(
+    Qt::SizeHint which, const QSizeF& constraint ) const
 {
     if ( m_data->dirtyLayout )
     {
@@ -138,7 +129,7 @@ QSizeF QskDialogButtonBox::contentsSizeHint() const
         m_data->dirtyLayout = false;
     }
 
-    return outerBoxSize( Panel, m_data->layoutBox->contentsSizeHint() );
+    return m_data->layoutBox->effectiveSizeHint( which, constraint );
 }
 
 void QskDialogButtonBox::invalidateLayout()
@@ -165,13 +156,10 @@ void QskDialogButtonBox::updateLayout()
 
 void QskDialogButtonBox::rearrangeButtons()
 {
-    // Result differs from the widget counter parts. Needs more
+    // Result differs from QDialogButtonBox. Needs more
     // investigation - TODO ...
 
     auto layoutBox = m_data->layoutBox;
-
-    const bool isActive = layoutBox->isActive();
-    layoutBox->setActive( false );
 
     layoutBox->clear();
 
@@ -196,7 +184,7 @@ void QskDialogButtonBox::rearrangeButtons()
             }
             case QPlatformDialogHelper::AcceptRole:
             {
-                const QList< QskPushButton* >& buttons = m_data->buttonLists[role];
+                const auto& buttons = m_data->buttons[ role ];
 
                 if ( !buttons.isEmpty() )
                     layoutBox->addItem( buttons.first() );
@@ -205,8 +193,7 @@ void QskDialogButtonBox::rearrangeButtons()
             }
             case QPlatformDialogHelper::AlternateRole:
             {
-                const QList< QskPushButton* >& buttons =
-                    m_data->buttonLists[QskDialog::AcceptRole];
+                const auto& buttons = m_data->buttons[ QskDialog::AcceptRole ];
 
                 if ( buttons.size() > 1 )
                     qskAddToLayout( buttons.mid( 1 ), reverse, layoutBox );
@@ -222,7 +209,7 @@ void QskDialogButtonBox::rearrangeButtons()
             case QPlatformDialogHelper::ApplyRole:
             case QPlatformDialogHelper::ResetRole:
             {
-                const QList< QskPushButton* > buttons = m_data->buttonLists[role];
+                const auto& buttons = m_data->buttons[ role ];
 
                 if ( !buttons.isEmpty() )
                     qskAddToLayout( buttons, reverse, layoutBox );
@@ -237,9 +224,7 @@ void QskDialogButtonBox::rearrangeButtons()
     if ( m_data->centeredButtons )
         layoutBox->addStretch( 1 );
 
-    layoutBox->setActive( isActive );
-
-    // organizing the tab chain ???
+    // reorganizing the tab chain ???
 }
 
 void QskDialogButtonBox::setCenteredButtons( bool centered )
@@ -258,22 +243,36 @@ bool QskDialogButtonBox::centeredButtons() const
     return m_data->centeredButtons;
 }
 
-void QskDialogButtonBox::addButton( QskPushButton* button, QskDialog::ButtonRole role )
+void QskDialogButtonBox::addButton(
+    QskPushButton* button, QskDialog::ActionRole role )
 {
-    if ( role < 0 || role >= QskDialog::NButtonRoles )
+    if ( role < 0 || role >= QskDialog::NActionRoles )
         return;
 
-    connect( button, &QskPushButton::clicked, this, &QskDialogButtonBox::onButtonClicked );
+    if ( button )
+    {
+        if ( button->parent() == nullptr )
+            button->setParent( this );
 
-    m_data->buttonLists[role] += button;
-    invalidateLayout();
+        /*
+            To have a proper ownership. Inserting the buttons
+            according to the layout rules will be done later
+         */
+        button->setParentItem( m_data->layoutBox );
+
+        connect( button, &QskPushButton::clicked, this,
+            &QskDialogButtonBox::onButtonClicked );
+
+        m_data->buttons[ role ] += button;
+        invalidateLayout();
+    }
 }
 
-void QskDialogButtonBox::addButton( QskDialog::StandardButton standardButton )
+void QskDialogButtonBox::addAction( QskDialog::Action action )
 {
-    QskPushButton* button = createButton( standardButton );
+    QskPushButton* button = createButton( action );
     if ( button )
-        addButton( button, qskButtonRole( standardButton ) );
+        addButton( button, qskActionRole( action ) );
 }
 
 void QskDialogButtonBox::removeButton( QskPushButton* button )
@@ -283,9 +282,9 @@ void QskDialogButtonBox::removeButton( QskPushButton* button )
     if ( button == nullptr )
         return;
 
-    for ( int i = 0; i < QskDialog::NButtonRoles; i++ )
+    for ( int i = 0; i < QskDialog::NActionRoles; i++ )
     {
-        QList< QskPushButton* >& buttons = m_data->buttonLists[i];
+        auto& buttons = m_data->buttons[ i ];
         if ( buttons.removeOne( button ) )
         {
             disconnect( button, &QskPushButton::clicked,
@@ -298,104 +297,99 @@ void QskDialogButtonBox::removeButton( QskPushButton* button )
 }
 
 QskPushButton* QskDialogButtonBox::createButton(
-    QskDialog::StandardButton standardButton ) const
+    QskDialog::Action action ) const
 {
-    return new QskDialogButton( standardButton );
+    return new QskDialogButton( action );
 }
 
 void QskDialogButtonBox::clear()
 {
-    for ( int i = 0; i < QskDialog::NButtonRoles; i++ )
+    for ( int i = 0; i < QskDialog::NActionRoles; i++ )
     {
-        for ( QQuickItem* button : m_data->buttonLists[i] )
-            delete button;
+        qDeleteAll( m_data->buttons[ i ] );
+        m_data->buttons[ i ].clear();
     }
 
     invalidateLayout();
 }
 
-void QskDialogButtonBox::setStandardButtons(
-    QskDialog::StandardButtons standardButton )
+void QskDialogButtonBox::setDefaultButton( QskPushButton* button )
 {
-    for ( int i = 0; i < QskDialog::NButtonRoles; i++ )
+    m_data->defaultButton = button;
+}
+
+QskPushButton* QskDialogButtonBox::defaultButton() const
+{
+    return m_data->defaultButton;
+}
+
+void QskDialogButtonBox::setActions( QskDialog::Actions actions )
+{
+    for ( int i = 0; i < QskDialog::NActionRoles; i++ )
     {
-        for ( QQuickItem* button : m_data->buttonLists[i]  )
-            delete button;
+        qDeleteAll( m_data->buttons[ i ] );
+        m_data->buttons[ i ].clear();
     }
 
     for ( int i = QskDialog::Ok; i <= QskDialog::RestoreDefaults; i <<= 1 )
     {
-        const QskDialog::StandardButton id = static_cast< QskDialog::StandardButton >( i );
-        if ( id & standardButton )
-            addButton( id );
+        const auto action = static_cast< QskDialog::Action >( i );
+        if ( action & actions )
+            addAction( action );
     }
 
     invalidateLayout();
 }
 
-QList< QskPushButton* > QskDialogButtonBox::buttons() const
+QVector< QskPushButton* > QskDialogButtonBox::buttons() const
 {
-    QList< QskPushButton* > buttons;
+    QVector< QskPushButton* > buttons;
 
-    for ( int i = 0; i < QskDialog::NButtonRoles; i++ )
-        buttons += m_data->buttonLists[i];
+    for ( int i = 0; i < QskDialog::NActionRoles; i++ )
+        buttons += m_data->buttons[ i ];
 
     return buttons;
 }
 
-QskDialog::ButtonRole QskDialogButtonBox::buttonRole( const QskPushButton* button ) const
+QVector< QskPushButton* > QskDialogButtonBox::buttons(
+    QskDialog::ActionRole role ) const
 {
-    for ( int i = 0; i < QskDialog::NButtonRoles; i++ )
-    {
-        const QList< QskPushButton* >& buttons = m_data->buttonLists[i];
+    if ( role < 0 || role >= QskDialog::NActionRoles )
+        return QVector< QskPushButton* >();
 
-        for ( const QskPushButton* btn : buttons )
+    return m_data->buttons[ role ];
+}
+
+
+QskDialog::ActionRole QskDialogButtonBox::actionRole(
+    const QskPushButton* button ) const
+{
+    for ( int i = 0; i < QskDialog::NActionRoles; i++ )
+    {
+        const auto& buttons = m_data->buttons[ i ];
+
+        for ( const auto btn : buttons )
         {
             if ( button == btn )
-                return static_cast< QskDialog::ButtonRole >( i );
+                return static_cast< QskDialog::ActionRole >( i );
         }
     }
 
     return QskDialog::InvalidRole;
 }
 
-QskDialog::StandardButton QskDialogButtonBox::defaultButtonCandidate() const
-{
-    // not the fastest code ever, but usually we always
-    // have a AcceptRole or YesRole button
-
-    static const QVector< QskDialog::ButtonRole > fallBackRoles =
-    {
-        QskDialog::AcceptRole, QskDialog::YesRole,
-        QskDialog::RejectRole, QskDialog::NoRole, QskDialog::DestructiveRole,
-        QskDialog::ActionRole, QskDialog::ResetRole,
-        QskDialog::ApplyRole, QskDialog::HelpRole
-    };
-
-    for ( auto role : fallBackRoles )
-    {
-        QskDialog::StandardButton defaultButton =
-            standardButton( buttonFromRole( role ) );
-
-        if ( defaultButton != QskDialog::NoButton )
-            return defaultButton;
-    }
-
-    return QskDialog::NoButton;
-}
-
 void QskDialogButtonBox::onButtonClicked()
 {
-    QskPushButton* button = qobject_cast< QskPushButton* >( sender() );
+    auto button = qobject_cast< QskPushButton* >( sender() );
     if ( button == nullptr )
         return;
 
-    switch( buttonRole( button ) )
+    switch ( actionRole( button ) )
     {
         case QskDialog::AcceptRole:
         case QskDialog::YesRole:
         {
-            m_data->clickedButton = standardButton( button );
+            m_data->clickedAction = action( button );
 
             Q_EMIT clicked( button );
             Q_EMIT accepted();
@@ -405,7 +399,7 @@ void QskDialogButtonBox::onButtonClicked()
         case QskDialog::NoRole:
         case QskDialog::DestructiveRole:
         {
-            m_data->clickedButton = standardButton( button );
+            m_data->clickedAction = action( button );
 
             Q_EMIT clicked( button );
             Q_EMIT rejected();
@@ -413,7 +407,7 @@ void QskDialogButtonBox::onButtonClicked()
         }
         default:
         {
-            m_data->clickedButton = QskDialog::NoButton;
+            m_data->clickedAction = QskDialog::NoAction;
             Q_EMIT clicked( button );
 
             break;
@@ -421,45 +415,44 @@ void QskDialogButtonBox::onButtonClicked()
     }
 }
 
-QskDialog::StandardButtons QskDialogButtonBox::standardButtons() const
+QskDialog::Actions QskDialogButtonBox::actions() const
 {
-    QskDialog::StandardButtons standardButtons;
+    QskDialog::Actions actions;
 
-    for ( int i = 0; i < QskDialog::NButtonRoles; i++ )
+    for ( int i = 0; i < QskDialog::NActionRoles; i++ )
     {
-        const QList< QskPushButton* >& buttons = m_data->buttonLists[i];
+        const auto& buttons = m_data->buttons[ i ];
 
-        for ( const QskPushButton* btn : buttons )
-            standardButtons |= this->standardButton( btn );
+        for ( const auto btn : buttons )
+            actions |= action( btn );
     }
 
-    return standardButtons;
+    return actions;
 }
 
-QskDialog::StandardButton QskDialogButtonBox::standardButton( const QskPushButton* button ) const
+QskDialog::Action QskDialogButtonBox::action( const QskPushButton* button ) const
 {
     if ( button )
     {
         if ( auto dialogButton = qobject_cast< const QskDialogButton* >( button ) )
-            return dialogButton->standardButton();
+            return dialogButton->action();
 
         const QVariant value = button->property( "standardButton" );
         if ( value.canConvert< int >() )
-            return static_cast< QskDialog::StandardButton >( value.toInt() );
+            return static_cast< QskDialog::Action >( value.toInt() );
     }
 
-    return QskDialog::NoButton;
+    return QskDialog::NoAction;
 }
 
-QskPushButton* QskDialogButtonBox::button(
-    QskDialog::StandardButton standardButton ) const
+QskPushButton* QskDialogButtonBox::button( QskDialog::Action action ) const
 {
-    for ( int i = 0; i < QskDialog::NButtonRoles; i++ )
+    for ( int i = 0; i < QskDialog::NActionRoles; i++ )
     {
-        const QList< QskPushButton* >& buttons = m_data->buttonLists[i];
-        for ( QskPushButton* btn : buttons )
+        const auto& buttons = m_data->buttons[ i ];
+        for ( auto btn : buttons )
         {
-            if ( this->standardButton( btn ) == standardButton )
+            if ( this->action( btn ) == action )
                 return btn;
         }
     }
@@ -467,24 +460,18 @@ QskPushButton* QskDialogButtonBox::button(
     return nullptr;
 }
 
-QskPushButton* QskDialogButtonBox::buttonFromRole( QskDialog::ButtonRole role ) const
+QskDialog::Action QskDialogButtonBox::clickedAction() const
 {
-    if ( role < 0 || role >= QskDialog::NButtonRoles )
-        return nullptr;
-
-    const auto& buttonList = m_data->buttonLists[role];
-    return buttonList.isEmpty() ? nullptr : buttonList.first();
-}
-
-QskDialog::StandardButton QskDialogButtonBox::clickedButton() const
-{
-    return m_data->clickedButton;
+    return m_data->clickedAction;
 }
 
 bool QskDialogButtonBox::event( QEvent* event )
 {
     if ( event->type() == QEvent::LayoutRequest )
-        resetImplicitSize();
+    {
+        if ( !m_data->dirtyLayout )
+            resetImplicitSize();
+    }
 
     return Inherited::event( event );
 }
@@ -503,10 +490,12 @@ bool QskDialogButtonBox::isDefaultButtonKeyEvent( const QKeyEvent* event )
     }
 }
 
-QString QskDialogButtonBox::buttonText( QskDialog::StandardButton standardButton )
+QString QskDialogButtonBox::buttonText( QskDialog::Action action )
 {
+    // should be redirected through the skin !
+
     const QPlatformTheme* theme = QGuiApplicationPrivate::platformTheme();
-    QString text = theme->standardButtonText( standardButton );
+    QString text = theme->standardButtonText( action );
 
 #if QT_VERSION < QT_VERSION_CHECK( 5, 7, 0 )
     text.remove( '&' );

@@ -5,26 +5,23 @@
 
 #include "QskListViewSkinlet.h"
 #include "QskListView.h"
-#include "QskAspect.h"
-#include "QskSkinRenderer.h"
-#include "QskTextOptions.h"
-#include "QskTextNode.h"
-#include "QskGraphic.h"
-#include "QskGraphicNode.h"
-#include "QskColorFilter.h"
 
-#include <QSGSimpleRectNode>
-#include <QSGTransformNode>
-#include <QTransform>
-#include <QtMath>
+#include "QskColorFilter.h"
+#include "QskGraphic.h"
+#include "QskSGNode.h"
+
+#include <qmath.h>
+#include <qsgnode.h>
+#include <qsgsimplerectnode.h>
+#include <qtransform.h>
 
 class QskListViewNode final : public QSGTransformNode
 {
-public:
-    inline QskListViewNode( int columnCount ):
-        columnCount( columnCount ),
-        m_rowMin( -1 ),
-        m_rowMax( -1 )
+  public:
+    inline QskListViewNode( int columnCount )
+        : m_columnCount( columnCount )
+        , m_rowMin( -1 )
+        , m_rowMax( -1 )
     {
         m_backgroundNode.setFlag( QSGNode::OwnedByParent, false );
         appendChildNode( &m_backgroundNode );
@@ -48,7 +45,7 @@ public:
         m_rowMin = rowMin;
         m_rowMax = rowMax;
     }
-    
+
     inline int rowMin() const
     {
         return m_rowMin;
@@ -66,7 +63,12 @@ public:
 
     inline int nodeCount() const
     {
-        return ( m_rowMin >= 0 ) ? ( m_rowMax - m_rowMin + 1 ) * columnCount : 0;
+        return ( m_rowMin >= 0 ) ? ( m_rowMax - m_rowMin + 1 ) * m_columnCount : 0;
+    }
+
+    inline int columnCount() const
+    {
+        return m_columnCount;
     }
 
     inline void invalidate()
@@ -74,9 +76,8 @@ public:
         m_rowMin = m_rowMax = -1;
     }
 
-    const int columnCount;
-
-private:
+  private:
+    int m_columnCount;
     int m_rowMin;
     int m_rowMax;
 
@@ -84,8 +85,8 @@ private:
     QSGNode m_foregroundNode;
 };
 
-QskListViewSkinlet::QskListViewSkinlet( QskSkin* skin ):
-    Inherited( skin )
+QskListViewSkinlet::QskListViewSkinlet( QskSkin* skin )
+    : Inherited( skin )
 {
 }
 
@@ -94,7 +95,7 @@ QskListViewSkinlet::~QskListViewSkinlet() = default;
 QSGNode* QskListViewSkinlet::updateContentsNode(
     const QskScrollView* scrollView, QSGNode* node ) const
 {
-    const auto* listView = static_cast< const QskListView* >( scrollView );
+    const auto listView = static_cast< const QskListView* >( scrollView );
 
     auto* listViewNode = static_cast< QskListViewNode* >( node );
     if ( listViewNode == nullptr )
@@ -115,7 +116,7 @@ void QskListViewSkinlet::updateBackgroundNodes(
 {
     QSGNode* backgroundNode = listViewNode->backgroundNode();
 
-    const int cellHeight = listView->rowHeight();
+    const qreal cellHeight = listView->rowHeight();
     const QRectF viewRect = listView->viewContentsRect();
 
     const QPointF scrolledPos = listView->scrollPos();
@@ -133,6 +134,12 @@ void QskListViewSkinlet::updateBackgroundNodes(
 
     if ( listView->alternatingRowColors() )
     {
+#if 1
+        /*
+            Cell might be better for regular cells, while ( Cell | AlternateColor )
+            could be used for the alternate color TODO ...
+         */
+#endif
         const auto color = listView->color( QskListView::Cell );
 
         for ( int row = rowMin; row <= rowMax; row++ )
@@ -181,7 +188,7 @@ void QskListViewSkinlet::updateBackgroundNodes(
 void QskListViewSkinlet::updateForegroundNodes(
     const QskListView* listView, QskListViewNode* listViewNode ) const
 {
-    QSGNode* parentNode = listViewNode->foregroundNode();
+    auto parentNode = listViewNode->foregroundNode();
 
     if ( listView->rowCount() <= 0 || listView->columnCount() <= 0 )
     {
@@ -190,10 +197,10 @@ void QskListViewSkinlet::updateForegroundNodes(
         return;
     }
 
-    const QMarginsF margins = listView->edgeMetrics( QskListView::Cell, QskAspect::Padding );
+    const auto margins = listView->paddingHint( QskListView::Cell );
 
-    const QRectF cr = listView->viewContentsRect();
-    const QPointF scrolledPos = listView->scrollPos();
+    const auto cr = listView->viewContentsRect();
+    const auto scrolledPos = listView->scrollPos();
 
     const int rowMin = qFloor( scrolledPos.y() / listView->rowHeight() );
 
@@ -246,7 +253,7 @@ void QskListViewSkinlet::updateForegroundNodes(
         }
     }
 
-    updateVisisbleForegroundNodes( listView, listViewNode,
+    updateVisibleForegroundNodes( listView, listViewNode,
         rowMin, rowMax, colMin, colMax, margins, forwards );
 
     // finally putting the nodes into their position
@@ -272,18 +279,19 @@ void QskListViewSkinlet::updateForegroundNodes(
             node = node->nextSibling();
             x += listView->columnWidth( col );
         }
+
         y += rowHeight;
     }
 
     listViewNode->resetRows( rowMin, rowMax );
 }
 
-void QskListViewSkinlet::updateVisisbleForegroundNodes(
+void QskListViewSkinlet::updateVisibleForegroundNodes(
     const QskListView* listView, QskListViewNode* listViewNode,
     int rowMin, int rowMax, int colMin, int colMax, const QMarginsF& margins,
     bool forward ) const
 {
-    QSGNode* parentNode = listViewNode->foregroundNode();
+    auto parentNode = listViewNode->foregroundNode();
 
     const int rowCount = rowMax - rowMin + 1;
     const int colCount = colMax - colMin + 1;
@@ -424,6 +432,8 @@ QSGTransformNode* QskListViewSkinlet::updateForegroundNode(
 QSGNode* QskListViewSkinlet::updateCellNode( const QskListView* listView,
     QSGNode* contentNode, const QRectF& rect, int row, int col ) const
 {
+    using namespace QskSGNode;
+
     QSGNode* newNode = nullptr;
 
 #if 1
@@ -433,11 +443,10 @@ QSGNode* QskListViewSkinlet::updateCellNode( const QskListView* listView,
         public API of QskListView TODO ...
      */
 #endif
-    const auto alignment = listView->flagHint< Qt::Alignment >(
-        QskListView::Cell | QskAspect::Alignment,
-        Qt::AlignVCenter | Qt::AlignLeft );
+    const auto alignment = listView->alignmentHint(
+        QskListView::Cell, Qt::AlignVCenter | Qt::AlignLeft );
 
-    const QVariant value = listView->valueAt( row, col );
+    const auto value = listView->valueAt( row, col );
 
     if ( value.canConvert< QskGraphic >() )
     {
@@ -446,8 +455,8 @@ QSGNode* QskListViewSkinlet::updateCellNode( const QskListView* listView,
 
         const auto colorFilter = listView->graphicFilterAt( row, col );
 
-        newNode = updateGraphicNode( listView, newNode, value.value< QskGraphic >(),
-            colorFilter, rect, alignment );
+        newNode = updateGraphicNode( listView, newNode,
+            value.value< QskGraphic >(), colorFilter, rect, alignment );
 
         if ( newNode )
             setNodeRole( newNode, GraphicRole );
@@ -467,10 +476,29 @@ QSGNode* QskListViewSkinlet::updateCellNode( const QskListView* listView,
     }
     else
     {
-        qWarning() << "QskListViewSkinlet: got unsupported QVariant type" << value.type();
+        qWarning() << "QskListViewSkinlet: got unsupported QVariant type" << value.typeName();
     }
 
     return newNode;
+}
+
+QSizeF QskListViewSkinlet::sizeHint( const QskSkinnable* skinnable,
+    Qt::SizeHint which, const QSizeF& ) const
+{
+    const auto listView = static_cast< const QskListView* >( skinnable );
+
+    qreal w = -1.0; // shouldn't we return something ???
+
+    if ( which != Qt::MaximumSize )
+    {
+        if ( listView->preferredWidthFromColumns() )
+        {
+            w = listView->scrollableSize().width();
+            w += listView->metric( QskScrollView::VerticalScrollBar | QskAspect::Size );
+        }
+    }
+
+    return QSizeF( w, -1.0 );
 }
 
 #include "moc_QskListViewSkinlet.cpp"

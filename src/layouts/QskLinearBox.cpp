@@ -4,163 +4,364 @@
  *****************************************************************************/
 
 #include "QskLinearBox.h"
-#include "QskLayoutItem.h"
-#include "QskLayoutEngine.h"
+#include "QskLinearLayoutEngine.h"
+#include "QskEvent.h"
+#include "QskQuick.h"
 
-#include <QtEndian>
+static void qskSetItemActive( QObject* receiver, const QQuickItem* item, bool on )
+{
+    /*
+        For QQuickItems not being derived from QskControl we manually
+        send QEvent::LayoutRequest events.
+     */
+
+    if ( on )
+    {
+        auto sendLayoutRequest =
+            [receiver]()
+            {
+                QEvent event( QEvent::LayoutRequest );
+                QCoreApplication::sendEvent( receiver, &event );
+            };
+
+        QObject::connect( item, &QQuickItem::implicitWidthChanged,
+            receiver, sendLayoutRequest );
+
+        QObject::connect( item, &QQuickItem::implicitHeightChanged,
+            receiver, sendLayoutRequest );
+    }
+    else
+    {
+        QObject::disconnect( item, &QQuickItem::implicitWidthChanged, receiver, nullptr );
+        QObject::disconnect( item, &QQuickItem::implicitHeightChanged, receiver, nullptr );
+    }
+}
 
 class QskLinearBox::PrivateData
 {
-public:
-    PrivateData( Qt::Orientation orient, int dim ):
-        dimension( dim ),
-        orientation( orient ),
-        transposeAlignments( false )
+  public:
+    PrivateData( Qt::Orientation orientation, uint dimension )
+        : engine( orientation, dimension )
     {
     }
 
-    uint dimension;
-    Qt::Edges extraSpacingAt;
-
-    Qt::Orientation orientation : 2;
-    bool transposeAlignments : 1;
+    QskLinearLayoutEngine engine;
 };
 
-QskLinearBox::QskLinearBox( QQuickItem* parent ):
-    QskLinearBox( Qt::Horizontal, std::numeric_limits< uint >::max(), parent )
+QskLinearBox::QskLinearBox( QQuickItem* parent )
+    : QskLinearBox( Qt::Horizontal, std::numeric_limits< uint >::max(), parent )
 {
 }
 
-QskLinearBox::QskLinearBox( Qt::Orientation orientation, QQuickItem* parent ):
-    QskLinearBox( orientation, std::numeric_limits< uint >::max(), parent )
+QskLinearBox::QskLinearBox( Qt::Orientation orientation, QQuickItem* parent )
+    : QskLinearBox( orientation, std::numeric_limits< uint >::max(), parent )
 {
 }
 
-QskLinearBox::QskLinearBox( Qt::Orientation orientation,
-        int dimension, QQuickItem* parent ):
-    Inherited( parent ),
-    m_data ( new PrivateData( orientation, dimension ) )
+QskLinearBox::QskLinearBox( Qt::Orientation orientation, uint dimension, QQuickItem* parent )
+    : QskIndexedLayoutBox( parent )
+    , m_data( new PrivateData( orientation, dimension ) )
 {
 }
 
 QskLinearBox::~QskLinearBox()
 {
+    auto& engine = m_data->engine;
+
+    for ( int i = 0; i < engine.count(); i++ )
+    {
+        if ( auto item = engine.itemAt( i ) )
+            setItemActive( item, false );
+    }
+}
+
+int QskLinearBox::elementCount() const
+{
+    return m_data->engine.count();
+}
+
+qreal QskLinearBox::spacingAtIndex( int index ) const
+{
+    return m_data->engine.spacerAt( index );
+}
+
+QQuickItem* QskLinearBox::itemAtIndex( int index ) const
+{
+    return m_data->engine.itemAt( index );
+}
+
+int QskLinearBox::indexOf( const QQuickItem* item ) const
+{
+    return m_data->engine.indexOf( item );
+}
+
+void QskLinearBox::removeAt( int index )
+{
+    removeItemInternal( index, true );
+}
+
+void QskLinearBox::removeItemInternal( int index, bool unparent )
+{
+    auto& engine = m_data->engine;
+
+    if ( index < 0 || index >= engine.count() )
+        return;
+
+    auto item = engine.itemAt( index );
+    engine.removeAt( index );
+
+    if ( item )
+    {
+        setItemActive( item, false );
+
+        if ( unparent )
+            unparentItem( item );
+    }
+
+    resetImplicitSize();
+    polish();
+}
+
+void QskLinearBox::removeItem( const QQuickItem* item )
+{
+    removeAt( indexOf( item ) );
+}
+
+void QskLinearBox::clear( bool autoDelete )
+{
+    auto& engine = m_data->engine;
+
+    // do we have visible elements
+    const bool hasVisibleElements = engine.rowCount() > 0;
+
+    for ( int i = engine.count() - 1; i >= 0; i-- )
+    {
+        auto item = engine.itemAt( i );
+        engine.removeAt( i );
+
+        if( item )
+        {
+            setItemActive( item, false );
+
+            if( autoDelete && ( item->parent() == this ) )
+                delete item;
+            else
+                unparentItem( item );
+        }
+    }
+
+    if ( hasVisibleElements )
+        resetImplicitSize();
+}
+
+void QskLinearBox::autoAddItem( QQuickItem* item )
+{
+    insertItem( -1, item );
+}
+
+void QskLinearBox::autoRemoveItem( QQuickItem* item )
+{
+    removeItemInternal( indexOf( item ), false );
+}
+
+void QskLinearBox::activate()
+{
+    polish();
+}
+
+void QskLinearBox::invalidate()
+{
+    m_data->engine.invalidate();
+
+    resetImplicitSize();
+    polish();
+}
+
+void QskLinearBox::setItemActive( QQuickItem* item, bool on )
+{
+    if ( on )
+    {
+        QObject::connect( item, &QQuickItem::visibleChanged,
+            this, &QskLinearBox::invalidate );
+    }
+    else
+    {
+        QObject::disconnect( item, &QQuickItem::visibleChanged,
+            this, &QskLinearBox::invalidate );
+    }
+
+    if ( qskControlCast( item ) == nullptr )
+        qskSetItemActive( this, item, on );
+}
+
+void QskLinearBox::updateLayout()
+{
+    if ( !maybeUnresized() )
+        m_data->engine.setGeometries( layoutRect() );
+}
+
+QSizeF QskLinearBox::layoutSizeHint(
+    Qt::SizeHint which, const QSizeF& constraint ) const
+{
+    if ( which == Qt::MaximumSize )
+    {
+        // we can extend beyond the maximum size of the children
+        return QSizeF();
+    }
+
+    return m_data->engine.sizeHint( which, constraint );
+}
+
+void QskLinearBox::geometryChangeEvent( QskGeometryChangeEvent* event )
+{
+    Inherited::geometryChangeEvent( event );
+
+    if ( event->isResized() )
+        polish();
+}
+
+
+void QskLinearBox::itemChange( ItemChange change, const ItemChangeData& value )
+{
+    Inherited::itemChange( change, value );
+
+#if 1
+    if ( change == QQuickItem::ItemVisibleHasChanged )
+    {
+        // when becoming visible we should run into polish anyway
+        if ( value.boolValue )
+            polish();
+    }
+#endif
+}
+
+bool QskLinearBox::event( QEvent* event )
+{
+    switch ( static_cast< int >( event->type() ) )
+    {
+        case QEvent::LayoutRequest:
+        {
+            invalidate();
+            break;
+        }
+        case QEvent::LayoutDirectionChange:
+        {
+            m_data->engine.setVisualDirection(
+                layoutMirroring() ? Qt::RightToLeft : Qt::LeftToRight );
+
+            polish();
+            break;
+        }
+        case QEvent::ContentsRectChange:
+        {
+            polish();
+            break;
+        }
+    }
+
+    return Inherited::event( event );
 }
 
 void QskLinearBox::setDimension( uint dimension )
 {
-    if ( dimension < 1 )
-        dimension = 1;
-
-    if ( dimension != m_data->dimension )
+    if ( m_data->engine.setDimension( dimension ) )
     {
-        m_data->dimension = dimension;
-
-        rearrange();
         polish();
+        resetImplicitSize();
+
+        Q_EMIT dimensionChanged();
     }
 }
 
 uint QskLinearBox::dimension() const
 {
-    return m_data->dimension;
+    return m_data->engine.dimension();
 }
 
 void QskLinearBox::setOrientation( Qt::Orientation orientation )
 {
-    if ( m_data->orientation != orientation )
-        transpose();
+    if ( m_data->engine.setOrientation( orientation ) )
+    {
+        polish();
+        resetImplicitSize();
+
+        Q_EMIT orientationChanged();
+    }
 }
 
 Qt::Orientation QskLinearBox::orientation() const
 {
-    return m_data->orientation;
+    return m_data->engine.orientation();
 }
 
 void QskLinearBox::transpose()
 {
-    const Qt::Orientation orientation =
-        ( m_data->orientation == Qt::Horizontal ) ? Qt::Vertical : Qt::Horizontal;
+    auto& engine = m_data->engine;
 
-    const int numItems = itemCount();
+#if 0
+    #include <qendian.h>
 
-    if ( numItems > 0 )
+    for ( int i = 0; i < engine.itemCount(); i++ )
     {
-        for ( int i = 0; i < numItems; i++ )
-        {
-            QskLayoutItem* layoutItem = engine().layoutItemAt( i );
-
-            const int row = layoutItem->firstRow( Qt::Horizontal );
-            const int col = layoutItem->firstRow( Qt::Vertical );
-
-            engine().removeItem( layoutItem );
-
-            layoutItem->setFirstRow( row, Qt::Vertical );
-            layoutItem->setFirstRow( col, Qt::Horizontal );
-
-#if 1
-            if ( m_data->transposeAlignments )
-            {
-                // Is it worth to blow the API with this flag, or would
-                // it be even better to have an indvidual flag for each
-                // item - and what about the size policies: do we want to
-                // transpose them too ?
-
-                const auto alignment = static_cast< Qt::Alignment >(
-                    qbswap( static_cast< quint16 >( layoutItem->alignment() ) ) );
-
-                layoutItem->setAlignment( alignment );
-            }
-#endif
-
-            if ( layoutItem->item() == nullptr )
-            {
-                // a spacing or stretch
-                layoutItem->setSpacingHint(
-                    layoutItem->spacingHint().transposed() );
-            }
-
-            engine().insertLayoutItem( layoutItem, i );
-        }
-
-        invalidate();
+        auto alignment = engine.alignmentAt( i );
+        qbswap( static_cast< quint16 >( alignment ) );
+        engine.setAlignmentAt( i, alignment );
     }
 
-    m_data->orientation = orientation;
-    Q_EMIT orientationChanged();
+    // extraSpacingAt ???
+#endif
+
+    if ( engine.orientation() == Qt::Horizontal )
+        setOrientation( Qt::Vertical );
+    else
+        setOrientation( Qt::Horizontal );
+}
+
+void QskLinearBox::setDefaultAlignment( Qt::Alignment alignment )
+{
+    if ( m_data->engine.setDefaultAlignment( alignment ) )
+        Q_EMIT defaultAlignmentChanged();
+}
+
+Qt::Alignment QskLinearBox::defaultAlignment() const
+{
+    return m_data->engine.defaultAlignment();
 }
 
 void QskLinearBox::setSpacing( qreal spacing )
 {
-    spacing = qMax( spacing, 0.0 );
+    /*
+        we should have setSpacing( qreal, Qt::Orientations ),
+        but need to create an API for Qml in QskQml
+        using qmlAttachedPropertiesObject then. TODO ...
+     */
 
-    if ( spacing != engine().spacing( Qt::Horizontal ) )
+    if ( m_data->engine.setSpacing(
+        spacing, Qt::Horizontal | Qt::Vertical ) )
     {
-        engine().setSpacing( spacing, Qt::Horizontal | Qt::Vertical );
-        activate();
-
+        polish();
         Q_EMIT spacingChanged();
     }
 }
 
 void QskLinearBox::resetSpacing()
 {
-    const qreal spacing = QskLayoutEngine::defaultSpacing( Qt::Horizontal );
+    const qreal spacing = m_data->engine.defaultSpacing( Qt::Horizontal );
     setSpacing( spacing );
 }
 
 qreal QskLinearBox::spacing() const
 {
     // do we always want to have the same spacing for both orientations
-    return engine().spacing( Qt::Horizontal );
+    return m_data->engine.spacing( Qt::Horizontal );
 }
 
 void QskLinearBox::setExtraSpacingAt( Qt::Edges edges )
 {
-    if ( edges != m_data->extraSpacingAt )
+    if ( edges != m_data->engine.extraSpacingAt() )
     {
-        m_data->extraSpacingAt = edges;
-        activate();
+        m_data->engine.setExtraSpacingAt( edges );
+        polish();
 
         Q_EMIT extraSpacingAtChanged();
     }
@@ -168,332 +369,197 @@ void QskLinearBox::setExtraSpacingAt( Qt::Edges edges )
 
 Qt::Edges QskLinearBox::extraSpacingAt() const
 {
-    return m_data->extraSpacingAt;
+    return m_data->engine.extraSpacingAt();
 }
 
-void QskLinearBox::addSpacer( qreal spacing, int stretchFactor )
+int QskLinearBox::addItem( QQuickItem* item, Qt::Alignment alignment )
 {
-    insertSpacer( -1, spacing, stretchFactor );
+    return insertItem( -1, item, alignment );
 }
 
-void QskLinearBox::insertSpacer( int index, qreal spacing, int stretchFactor )
+int QskLinearBox::addItem( QQuickItem* item )
 {
-    spacing = qMax( spacing, 0.0 );
-    stretchFactor = qMax( stretchFactor, 0 );
+    return insertItem( -1, item );
+}
 
-    QskLayoutItem* layoutItem;
-    if ( m_data->orientation == Qt::Horizontal )
-        layoutItem = new QskLayoutItem( QSizeF( spacing, 0 ), stretchFactor, 0, 0 );
-    else
-        layoutItem = new QskLayoutItem( QSizeF( 0, spacing ), stretchFactor, 0, 0 );
+int QskLinearBox::insertItem(
+    int index, QQuickItem* item, Qt::Alignment alignment )
+{
+    if ( auto control = qskControlCast( item ) )
+        control->setLayoutAlignmentHint( alignment );
+
+    return insertItem( index, item );
+}
+
+int QskLinearBox::insertItem( int index, QQuickItem* item )
+{
+    if ( item == nullptr )
+        return -1;
+
+    if ( qskIsTransparentForPositioner( item ) )
+    {
+        qWarning() << "Inserting an item that is marked as transparent for layouting:"
+            << item->metaObject()->className();
+
+        qskSetTransparentForPositioner( item, false );
+    }
+
+    auto& engine = m_data->engine;
+
+    if ( item->parentItem() == this )
+    {
+        const int oldIndex = indexOf( item );
+        if ( oldIndex >= 0 )
+        {
+            // the item has been inserted before
+
+            const bool doAppend = index < 0 || index >= engine.count();
+
+            if ( ( index == oldIndex ) ||
+                ( doAppend && oldIndex == engine.count() - 1 ) )
+            {
+                // already at its position, nothing to do
+                return oldIndex;
+            }
+
+            removeAt( oldIndex );
+        }
+    }
+
+    reparentItem( item );
+
+    index = engine.insertItem( item, index );
+
+    // Re-ordering the child items to have a a proper focus tab chain
+
+    bool reordered = false;
+
+    if ( index < engine.count() - 1 )
+    {
+        for ( int i = index + 1; i < engine.count(); i++ )
+        {
+            if ( auto nextItem = engine.itemAt( i ) )
+            {
+                item->stackBefore( nextItem );
+                reordered = true;
+
+                break;
+            }
+        }
+    }
+
+    if ( !reordered )
+    {
+        const auto children = childItems();
+        if ( item != children.last() )
+            item->stackAfter( children.last() );
+    }
+
+    setItemActive( item, true );
 
 #if 1
-    if ( stretchFactor >= 0 )
-        layoutItem->setStretchFactor( stretchFactor, m_data->orientation ); // already above ???
+    // Is there a way to block consecutive calls ???
+    resetImplicitSize();
+    polish();
 #endif
 
-    insertLayoutItem( layoutItem, index );
+    return index;
 }
 
-void QskLinearBox::addStretch( int stretchFactor )
+int QskLinearBox::addSpacer( qreal spacing, int stretchFactor )
 {
-    insertSpacer( -1, 0, stretchFactor );
+    return insertSpacer( -1, spacing, stretchFactor );
 }
 
-void QskLinearBox::insertStretch( int index, int stretchFactor )
+int QskLinearBox::insertSpacer( int index, qreal spacing, int stretchFactor )
 {
-    insertSpacer( index, 0, stretchFactor );
+    auto& engine = m_data->engine;
+
+    const int numItems = engine.count();
+    if ( index < 0 || index > numItems )
+        index = numItems;
+
+    index = engine.insertSpacerAt( index, spacing );
+
+    stretchFactor = qMax( stretchFactor, 0 );
+    engine.setStretchFactorAt( index, stretchFactor );
+
+#if 1
+    // Is there a way to block consecutive calls ???
+    resetImplicitSize();
+    polish();
+#endif
+
+    return index;
+}
+
+int QskLinearBox::addStretch( int stretchFactor )
+{
+    return insertSpacer( -1, 0, stretchFactor );
+}
+
+int QskLinearBox::insertStretch( int index, int stretchFactor )
+{
+    return insertSpacer( index, 0, stretchFactor );
 }
 
 void QskLinearBox::setStretchFactor( int index, int stretchFactor )
 {
-    if ( QskLayoutItem* layoutItem = engine().layoutItemAt( index ) )
+    auto& engine = m_data->engine;
+
+    if ( engine.stretchFactorAt( index ) != stretchFactor )
     {
-        if ( layoutItem->stretchFactor( m_data->orientation ) != stretchFactor )
-        {
-            layoutItem->setStretchFactor( stretchFactor, m_data->orientation );
-            // activate();
-        }
+        engine.setStretchFactorAt( index, stretchFactor );
+        polish();
     }
 }
 
 int QskLinearBox::stretchFactor( int index ) const
 {
-    if ( QskLayoutItem* layoutItem = engine().layoutItemAt( index ) )
-        return layoutItem->stretchFactor( m_data->orientation );
-
-    return 0;
+    return m_data->engine.stretchFactorAt( index );
 }
 
-void QskLinearBox::setStretchFactor( QQuickItem* item, int stretch )
+void QskLinearBox::setStretchFactor( const QQuickItem* item, int stretch )
 {
-    setStretchFactor( engine().indexOf( item ), stretch );
+    setStretchFactor( indexOf( item ), stretch );
 }
 
-int QskLinearBox::stretchFactor( QQuickItem* item ) const
+int QskLinearBox::stretchFactor( const QQuickItem* item ) const
 {
-    return stretchFactor( engine().indexOf( item ) );
+    return stretchFactor( indexOf( item ) );
 }
 
-void QskLinearBox::setRetainSizeWhenHidden( int index, bool on )
+void QskLinearBox::dump() const
 {
-    QskLayoutItem* layoutItem = engine().layoutItemAt( index );
-    if ( layoutItem && on != layoutItem->retainSizeWhenHidden() )
+    const auto& engine = m_data->engine;
+
+    auto debug = qDebug();
+
+    QDebugStateSaver saver( debug );
+    debug.nospace();
+
+    const auto constraint = sizeConstraint();
+
+    debug << "QskLinearBox" << engine.orientation()
+        << " w:" << constraint.width() << " h:" << constraint.height() << '\n';
+
+    for ( int i = 0; i < engine.count(); i++ )
     {
-        layoutItem->setRetainSizeWhenHidden( on );
-        invalidate();
-    }
-}
+        debug << "  " << i << ": ";
 
-bool QskLinearBox::retainSizeWhenHidden( int index ) const
-{
-    QskLayoutItem* layoutItem = engine().layoutItemAt( index );
-    if ( layoutItem )
-        return layoutItem->retainSizeWhenHidden();
-
-    return false;
-}
-
-void QskLinearBox::setRetainSizeWhenHidden( QQuickItem* item, bool on )
-{
-    setRetainSizeWhenHidden( engine().indexOf( item ), on );
-}
-
-bool QskLinearBox::retainSizeWhenHidden( QQuickItem* item ) const
-{
-    return retainSizeWhenHidden( engine().indexOf( item ) );
-}
-
-void QskLinearBox::setRowSpacing( int row, qreal spacing )
-{
-    if ( row >= 0 )
-    {
-        engine().setRowSpacing( row, spacing, Qt::Horizontal );
-        activate();
-    }
-}
-
-qreal QskLinearBox::rowSpacing( int row ) const
-{
-    return engine().rowSpacing( row, Qt::Horizontal );
-}
-
-void QskLinearBox::setColumnSpacing( int column, qreal spacing )
-{
-    if ( column >= 0 )
-    {
-        engine().setRowSpacing( column, spacing, Qt::Vertical );
-        activate();
-    }
-}
-
-qreal QskLinearBox::columnSpacing( int column ) const
-{
-    return engine().rowSpacing( column, Qt::Vertical );
-}
-
-void QskLinearBox::setRowStretchFactor( int row, int stretchFactor )
-{
-    if ( row >= 0 )
-    {
-        engine().setRowStretchFactor( row, stretchFactor, Qt::Vertical );
-        activate();
-    }
-}
-
-int QskLinearBox::rowStretchFactor( int row ) const
-{
-    return engine().rowStretchFactor( row, Qt::Vertical );
-}
-
-void QskLinearBox::setColumnStretchFactor( int column, int stretchFactor )
-{
-    if ( column >= 0 )
-    {
-        engine().setRowStretchFactor( column, stretchFactor, Qt::Horizontal );
-        activate();
-    }
-}
-
-int QskLinearBox::columnStretchFactor( int column ) const
-{
-    return engine().rowStretchFactor( column, Qt::Horizontal );
-}
-
-QSizeF QskLinearBox::contentsSizeHint() const
-{
-    if ( !isActive() )
-        return QSizeF( -1, -1 );
-
-    if ( itemCount() == 0 )
-        return QSizeF( 0, 0 );
-   
-    return engine().sizeHint( Qt::PreferredSize );
-}
-
-qreal QskLinearBox::heightForWidth( qreal width ) const 
-{
-    const QSizeF constraint( width, -1 );
-    return engine().sizeHint( Qt::PreferredSize, constraint ).height();
-}
-
-qreal QskLinearBox::widthForHeight( qreal height ) const 
-{
-    const QSizeF constraint( -1, height );
-    return engine().sizeHint( Qt::PreferredSize, constraint ).width();
-}
-
-void QskLinearBox::setupLayoutItem( QskLayoutItem* layoutItem, int index )
-{
-    int col = index % m_data->dimension;
-    int row = index / m_data->dimension;
-
-    if ( m_data->orientation == Qt::Vertical )
-        qSwap( col, row );
-
-    layoutItem->setFirstRow( col, Qt::Horizontal );
-    layoutItem->setFirstRow( row, Qt::Vertical );
-}
-
-void QskLinearBox::layoutItemInserted( QskLayoutItem*, int index )
-{
-    if ( index < itemCount() - 1 )
-        rearrange();
-}
-
-void QskLinearBox::layoutItemRemoved( QskLayoutItem*, int index )
-{
-    Q_UNUSED( index )
-    rearrange();
-}
-
-void QskLinearBox::rearrange()
-{
-    bool doInvalidate = false;
-
-    const int numItems = itemCount();
-
-    for ( int i = 0; i < numItems; i++ )
-    {
-        int row = i / m_data->dimension;
-        int col = i % m_data->dimension;
-
-        if ( m_data->orientation == Qt::Vertical )
-            qSwap( col, row );
-
-        QskLayoutItem* layoutItem = engine().layoutItemAt( i );
-
-        if ( layoutItem->firstRow( Qt::Horizontal ) != col
-            || layoutItem->firstRow( Qt::Vertical ) != row )
+        if ( auto item = engine.itemAt( i ) )
         {
-            engine().removeItem( layoutItem );
-
-            layoutItem->setFirstRow( col, Qt::Horizontal );
-            layoutItem->setFirstRow( row, Qt::Vertical );
-
-            engine().insertLayoutItem( layoutItem, i );
-
-            doInvalidate = true;
+            const auto constraint = qskSizeConstraint( item, Qt::PreferredSize );
+            debug << item->metaObject()->className()
+                <<  " w:" << constraint.width() << " h:" << constraint.height();
         }
-    }
-
-    if ( doInvalidate )
-        invalidate();
-}
-
-QRectF QskLinearBox::alignedLayoutRect( const QRectF& rect ) const
-{
-    if ( m_data->extraSpacingAt == 0 )
-        return rect;
-
-    const QskLayoutEngine& engine = this->engine();
-
-    QRectF r = rect;
-
-    // not 100% sure if this works for dynamic constraints
-    // and having extraSpacingAt for both directions ...
-
-    if ( ( m_data->extraSpacingAt & Qt::LeftEdge ) ||
-        ( m_data->extraSpacingAt & Qt::RightEdge ) )
-    {
-        bool isExpandable = false;
-
-        for ( int i = 0; i < engine.itemCount(); i++ )
+        else
         {
-            const QskLayoutItem* item = engine.layoutItemAt( i );
-
-            if ( !item->isIgnored() &&
-                ( item->sizePolicy( Qt::Horizontal ) & QskSizePolicy::GrowFlag ) )
-            {
-                isExpandable = true;
-                break;
-            }
+            debug << "spacer: " << engine.spacerAt( i );
         }
 
-        if ( !isExpandable )
-        {
-            const qreal w = widthForHeight( r.height() );
-
-            if ( m_data->extraSpacingAt & Qt::LeftEdge )
-            {
-                if ( m_data->extraSpacingAt & Qt::RightEdge )
-                {
-                    r.moveLeft( r.center().x() - w / 2 );
-                    r.setWidth( w );
-                }
-                else
-                {
-                    r.setLeft( r.right() - w );
-                }
-            }
-            else
-            {
-                r.setRight( r.left() + w );
-            }
-        }
+        debug << '\n';
     }
-
-    if ( ( m_data->extraSpacingAt & Qt::TopEdge ) ||
-         ( m_data->extraSpacingAt & Qt::BottomEdge ) )
-    {
-        bool isExpandable = false;
-
-        for ( int i = 0; i < engine.itemCount(); i++ )
-        {
-            const QskLayoutItem* item = engine.layoutItemAt( i );
-
-            if ( !item->isIgnored() &&
-                ( item->sizePolicy( Qt::Vertical ) & QskSizePolicy::GrowFlag ) )
-            {
-                isExpandable = true;
-                break;
-            }
-        }
-
-        if ( !isExpandable )
-        {
-            const qreal h = heightForWidth( r.width() );
-
-            if ( m_data->extraSpacingAt & Qt::TopEdge )
-            {
-                if ( m_data->extraSpacingAt & Qt::BottomEdge )
-                {
-                    r.moveTop( r.center().y() - h / 2 );
-                    r.setHeight( h );
-                }
-                else
-                {
-                    r.setTop( r.bottom() - h );
-                }
-            }
-            else
-            {
-                r.setBottom( r.top() + h );
-            }
-        }
-    }
-
-    return r;
 }
 
 #include "moc_QskLinearBox.cpp"

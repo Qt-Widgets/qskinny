@@ -1,0 +1,674 @@
+/*!
+    \class QskControl QskControl.h
+    \ingroup Framework Controls
+
+    \brief Base class of all controls
+
+    \states QskControl::Disabled, QskControl::Hovered, QskControl::Focused
+*/
+
+/*!
+    \var QskControl::Disabled
+
+        A state bit that is set, when QQuickItem::isEnabled() == false.
+
+    \extends QskAspect::State
+    \sa   QskQuickItem::setDisabled()
+    \saqt QQuickItem::enabled
+
+    \var QskControl::Hovered
+
+        A state bit that is set, when the item is hovered
+        It allows to define a specific representation in the skin,
+        when being hovered.
+
+    \saqt QQuickItem::acceptHoverEvents(), QQuickItem::hoverEnterEvent(),
+          QQuickItem::hoverLeaveEvent()
+
+    \var QskControl::Focused
+
+        A state bit that is set, when the item is the active focus item
+
+    \sa   focusPolicy
+    \saqt QQuickItem::acceptHoverEvents(), QQuickItem::focusInEvent()
+          QQuickItem::focusOutEvent()
+*/
+
+/*!
+    \enum QskControl::LayoutHint
+
+    Hints, that can be used by the layout code
+
+    \sa setLayoutHint(), testLayoutHint(), setLayoutHints(), layoutHints()
+        setAutoLayoutChildren(), QskLinearBox, QskGridBox, QskStackBox
+
+    \var QskControl::RetainSizeWhenHidden
+
+        When being enabled the layout code should retain the necessary space
+        for the control even when it is hidden.
+
+    \saqt QSizePolicy::retainSizeWhenHidden()
+
+    \var QskControl::LayoutWhenHidden
+
+        When being enabled the layout code should set the geometry
+        to the control - even if it is not visible.
+*/
+
+/*!
+    \property QLocale QskControl::locale
+
+    \accessors locale(), setLocale(), resetLocale(), localeChanged()
+*/
+
+/*!
+    \property bool QskControl::autoFillBackground
+
+    This property holds whether the background is filled automatically
+    with the background gradient.
+
+    \accessors autoFillBackground(), setAutoFillBackground()
+
+    \sa background()
+    \saqt QWidget::autoFillBackground
+
+*/
+
+/*!
+    \property bool QskControl::autoLayoutChildren
+
+    \accessors autoLayoutChildren(), setAutoLayoutChildren()
+*/
+
+/*!
+    \property Qt::FocusPolicy QskControl::focusPolicy
+
+    \accessors focusPolicy(), setFocusPolicy(), focusPolicyChanged()
+*/
+
+/*!
+    \property bool QskControl::wheelEnabled
+
+    \accessors isWheelEnabled(), setWheelEnabled(), wheelEnabledChanged()
+*/
+
+/*!
+    \property bool QskControl::visibleToLayout
+
+    \accessors isVisibleToLayout()
+*/
+
+/*!
+    \property QskMargins QskControl::margins
+
+    \accessors margins(), setMargins(), resetMargins(), marginsChanged()
+*/
+
+/*!
+    \property QskGradient QskControl::background
+
+    \accessors background(), setBackground(), resetBackground(), backgroundChanged()
+*/
+
+/*!
+    \property QskSizePolicy QskControl::sizePolicy
+
+    \accessors sizePolicy(), setSizePolicy()
+*/
+
+/*!
+    \property bool QskControl::autoLayoutChildren
+
+    \accessors autoLayoutChildren(), setAutoLayoutChildren()
+*/
+
+/*!
+    \property QSizeF QskControl::minimumSize
+
+    \accessors minimumSize(), setMinimumSize()
+    \sa effectiveSizeHint(), setExplicitSizeHint()
+        setMinimumWidth(), setMinimumHeight()
+*/
+
+/*!
+    \property QSizeF QskControl::maximumSize
+    
+    \accessors maximumSize(), setMaximumSize()
+    \sa effectiveSizeHint(), setExplicitSizeHint()
+        setMaximumWidth(), setMaximumHeight()
+*/
+
+/*!
+    \property QSizeF QskControl::preferredSize
+
+    \accessors preferredSize(), setPreferredSize()
+    \sa effectiveSizeHint(), setExplicitSizeHint(),
+        setPreferredWidth(), setPreferredHeight()
+*/
+
+/*!
+    \property QSizeF QskControl::sizeConstraint
+
+    \accessors sizeConstraint()
+*/
+
+/*!
+    \fn QskControl::QskControl
+
+*/
+
+/*!
+    \fn QskControl::~QskControl
+
+*/
+
+/*!
+    \fn QskControl::setMargins( qreal )
+
+    Sets the margins around the contents of the control 
+
+    The value is stored in the local hint table for the aspect:
+         QskControl::Control | QskAspect::Metric | QskAspect::Margin
+
+    \param margin Margin for all sides
+    \aspect QskControl::Control | QskAspect::Metric | QskAspect::Margin
+
+    \sa contentsRect(), margins(), QskSkinnable::setMarginHint()
+*/
+
+/*!
+    \fn QskControl::setMargins( const QMarginsF& )
+
+    Sets the margins around the contents of the control 
+
+    \param margins Margins
+    \aspect QskControl::Control | QskAspect::Metric | QskAspect::Margin
+
+    \sa contentsRect(), margins()
+    \saqt QEvent::ContentsRectChange
+*/
+
+/*!
+    \fn QskControl::resetMargins
+
+    Reset the margins to the default value provided from the skin
+
+    \aspect QskControl::Control | QskAspect::Metric | QskAspect::Margin
+
+    \sa contentsRect(), setMargins(), margins()
+    \saqt QEvent::ContentsRectChange
+*/
+
+/*!
+    \fn QskControl::margins() const
+
+    \return margins around the contents of the control
+    \aspect QskControl::Control | QskAspect::Metric | QskAspect::Margin
+
+    \sa contentsRect(), setMargins()
+    \saqt QEvent::ContentsRectChange
+*/
+
+/*!
+    \fn QskControl::setBackgroundColor
+
+    A conveninece method that enables the autoFillBackground property
+    and sets a solid color as background. Usually used for debugging
+    layout problems.
+
+    \sa setBackground(), setAutoFillBackground()
+    \sa QskQuickItem::DebugForceBackground
+*/
+
+/*!
+    \fn QskControl::setBackground
+
+    Set the gradient that is used to fill the background,
+    when autoFillBackground is enabled.
+
+    \aspect QskControl::Control | QskAspect::Color
+    \sa resetBackground(), background(), autoFillBackground()
+*/
+
+/*!
+    \fn QskControl::resetBackground
+
+    Reset the background gradient to the default colors from the skin 
+
+    \aspect QskControl::Control | QskAspect::Color
+    \sa setBackground(), background(), autoFillBackground()
+*/
+
+/*!
+    \fn QskControl::background() const
+
+    \return Gradient that is used to fill the background,
+            when autoFillBackground is enabled.
+
+    \aspect QskControl::Control | QskAspect::Color
+    \sa setBackground(), resetBackground(), autoFillBackground()
+*/
+
+/*!
+    \fn QskControl::contentsRect
+
+    \sa margins(), setMargins(), 
+*/
+
+/*!
+    \fn QskControl::layoutRect
+
+*/
+
+/*!
+    \fn QskControl::layoutRectForSize
+
+*/
+
+/*!
+    \fn QskControl::gestureRect
+
+*/
+
+/*!
+    \fn QskControl::focusIndicatorRect
+
+*/
+
+/*!
+    \fn QskControl::focusIndicatorClipRect
+
+*/
+
+/*!
+    \fn QskControl::subControlRect( QskAspect::Subcontrol ) const
+
+*/
+
+/*!
+    \fn QskControl::subControlRect( const QSizeF&, QskAspect::Subcontrol ) const
+
+*/
+
+/*!
+    \fn QskControl::subControlContentsRect( QskAspect::Subcontrol ) const
+
+*/
+
+/*!
+    \fn QskControl::subControlContentsRect( const QSizeF&, QskAspect::Subcontrol ) const
+
+*/
+
+/*!
+    \fn QskControl::setAutoFillBackground
+
+    Set or clear the autoFillBackground property
+    \sa autoFillBackground()
+*/
+
+/*!
+    \fn QskControl::autoFillBackground() const
+
+    \return Value of the autoFillBackground property
+    \sa setAutoFillBackground()
+*/
+
+/*!
+    \fn QskControl::setAutoLayoutChildren
+
+    Set or clear the autoLayoutChildren property
+    \sa autoFillBackground()
+*/
+
+/*!
+    \fn QskControl::autoLayoutChildren() const
+
+    \return Value of the autoLayoutChildren property
+    \sa autoLayoutChildren()
+*/
+
+/*!
+    \fn QskControl::setWheelEnabled
+
+*/
+
+/*!
+    \fn QskControl::isWheelEnabled
+
+*/
+
+/*!
+    \fn QskControl::setFocusPolicy
+
+*/
+
+/*!
+    \fn QskControl::focusPolicy() const
+
+*/
+
+/*!
+    \fn QskControl::setSizePolicy( QskSizePolicy );
+
+*/
+
+/*!
+    \fn QskControl::setSizePolicy( QskSizePolicy::Policy, QskSizePolicy::Policy )
+
+*/
+
+/*!
+    \fn QskControl::setSizePolicy( Qt::Orientation, QskSizePolicy::Policy )
+
+*/
+
+/*!
+    \fn QskControl::sizePolicy() const
+
+*/
+
+/*!
+    \fn QskControl::sizePolicy( Qt::Orientation ) const
+
+*/
+
+/*!
+    \fn QskControl::setLayoutAlignmentHint
+
+*/
+
+/*!
+    \fn QskControl::layoutAlignmentHint
+
+*/
+
+/*!
+    \fn QskControl::setLayoutHint
+
+*/
+
+/*!
+    \fn QskControl::testLayoutHint
+
+*/
+
+/*!
+    \fn QskControl::setLayoutHints
+
+*/
+
+/*!
+    \fn QskControl::layoutHints
+
+*/
+
+/*!
+    \fn QskControl::isVisibleToLayout
+
+*/
+
+/*!
+    \fn QskControl::setMinimumSize( const QSizeF& )
+
+*/
+
+/*!
+    \fn QskControl::setMinimumSize( qreal, qreal )
+
+*/
+
+/*!
+    \fn QskControl::setMinimumWidth
+
+*/
+
+/*!
+    \fn QskControl::setMinimumHeight
+
+*/
+
+/*!
+    \fn QskControl::setMaximumSize( const QSizeF& )
+
+*/
+
+/*!
+    \fn QskControl::setMaximumSize( qreal, qreal )
+
+*/
+
+/*!
+    \fn QskControl::setMaximumWidth
+
+*/
+
+/*!
+    \fn QskControl::setMaximumHeight
+
+*/
+
+/*!
+    \fn QskControl::setPreferredSize( const QSizeF& )
+
+*/
+
+/*!
+    \fn QskControl::setPreferredSize( qreal, qreal )
+
+*/
+
+/*!
+    \fn QskControl::setPreferredWidth
+
+*/
+
+/*!
+    \fn QskControl::setPreferredHeight
+
+*/
+
+/*!
+    \fn QskControl::setFixedSize( const QSizeF& );
+
+*/
+
+/*!
+    \fn QskControl::setFixedSize( qreal width, qreal height );
+
+*/
+
+/*!
+    \fn QskControl::setFixedWidth
+
+*/
+
+/*!
+    \fn QskControl::setFixedHeight
+
+*/
+
+/*!
+    \fn QskControl::setExplicitSizeHint( Qt::SizeHint, const QSizeF& );
+
+*/
+
+/*!
+    \fn QskControl::setExplicitSizeHint( Qt::SizeHint, qreal width, qreal height );
+
+*/
+
+/*!
+    \fn QskControl::resetExplicitSizeHint
+
+*/
+
+/*!
+    \fn QskControl::minimumSize() const;
+
+*/
+
+/*!
+    \fn QskControl::maximumSize() const;
+
+*/
+
+/*!
+    \fn QskControl::preferredSize() const;
+
+*/
+
+/*!
+    \fn QskControl::explicitSizeHint
+
+*/
+
+/*!
+    \fn QskControl::implicitSizeHint
+
+*/
+
+/*!
+    \fn QskControl::sizeHint
+
+*/
+
+/*!
+    \fn QskControl::heightForWidth
+
+*/
+
+/*!
+    \fn QskControl::widthForHeight
+
+*/
+
+/*!
+    \fn QskControl::effectiveSizeHint
+
+*/
+
+/*!
+    \fn QskControl::sizeConstraint( Qt::SizeHint, const QSizeF& ) const
+
+*/
+
+/*!
+    \fn QskControl::sizeConstraint() const
+
+*/
+
+/*!
+    \fn QskControl::locale() const
+
+*/
+
+/*!
+    \fn QskControl::resetLocale
+
+*/
+
+/*!
+    \fn QskControl::subControls
+
+*/
+
+/*!
+    \fn void QskControl::backgroundChanged
+
+*/
+
+/*!
+    \fn void QskControl::marginsChanged
+
+*/
+
+/*!
+    \fn void QskControl::focusIndicatorRectChanged
+
+*/
+
+/*!
+    \fn void QskControl::localeChanged
+
+*/
+
+/*!
+    \fn void QskControl::focusPolicyChanged
+
+*/
+
+/*!
+    \fn void QskControl::wheelEnabledChanged
+
+*/
+
+/*!
+    \fn void QskControl::setLocale
+
+*/
+
+/*!
+    \fn bool QskControl::event
+
+*/
+
+/*!
+    \fn virtual void QskControl::gestureEvent
+
+*/
+
+/*!
+    \fn void QskControl::hoverEnterEvent
+
+*/
+
+/*!
+    \fn void QskControl::hoverLeaveEvent
+
+*/
+
+/*!
+    \fn bool QskControl::childMouseEventFilter
+
+*/
+
+/*!
+    \fn virtual bool QskControl::gestureFilter
+
+*/
+
+/*!
+    \fn void QskControl::itemChange
+
+*/
+
+/*!
+    \fn void QskControl::geometryChange
+
+*/
+
+/*!
+    \fn void QskControl::initSizePolicy
+
+*/
+
+/*!
+    \fn virtual void QskControl::updateResources
+
+*/
+
+/*!
+    \fn virtual void QskControl::updateLayout
+
+*/
+
+/*!
+    \fn virtual QSizeF QskControl::contentsSizeHint
+
+*/
+
+/*!
+    \fn virtual QSizeF QskControl::layoutSizeHint
+
+*/

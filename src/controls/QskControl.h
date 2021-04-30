@@ -4,86 +4,77 @@
  *****************************************************************************/
 
 #ifndef QSK_CONTROL_H
-#define QSK_CONTROL_H 1
+#define QSK_CONTROL_H
 
-#include "QskGlobal.h"
-#include "QskResizable.h"
+#include "QskQuickItem.h"
 #include "QskSkinnable.h"
 #include "QskAspect.h"
+#include "QskGradient.h"
+#include "QskSizePolicy.h"
 
-#include <QQuickItem>
-#include <QLocale>
-
+#include <qlocale.h>
 #include <memory>
 
 class QskControlPrivate;
-
-class QskGeometryChangeEvent;
-class QskWindowChangeEvent;
 class QskGestureEvent;
 
-template class QVector< QskAspect::Aspect >;
-
-class QSK_EXPORT QskControl : public QQuickItem, public QskResizable, public QskSkinnable
+class QSK_EXPORT QskControl : public QskQuickItem, public QskSkinnable
 {
     Q_OBJECT
 
     Q_PROPERTY( QLocale locale READ locale
-        WRITE setLocale RESET resetLocale NOTIFY localeChanged FINAL )
+        WRITE setLocale RESET resetLocale NOTIFY localeChanged )
 
     Q_PROPERTY( bool autoFillBackground READ autoFillBackground
-        WRITE setAutoFillBackground NOTIFY controlFlagsChanged FINAL )
+        WRITE setAutoFillBackground )
 
     Q_PROPERTY( bool autoLayoutChildren READ autoLayoutChildren
-        WRITE setAutoLayoutChildren NOTIFY controlFlagsChanged FINAL )
+        WRITE setAutoLayoutChildren )
 
-    Q_PROPERTY( bool polishOnResize READ polishOnResize
-        WRITE setPolishOnResize NOTIFY controlFlagsChanged FINAL )
+    Q_PROPERTY( Qt::FocusPolicy focusPolicy READ focusPolicy
+        WRITE setFocusPolicy NOTIFY focusPolicyChanged )
 
-    Q_PROPERTY( bool transparentForPositioners READ isTransparentForPositioner
-        WRITE setTransparentForPositioner NOTIFY controlFlagsChanged FINAL )
+    Q_PROPERTY( bool wheelEnabled READ isWheelEnabled
+        WRITE setWheelEnabled NOTIFY wheelEnabledChanged )
 
-    Q_PROPERTY( bool tabFence READ isTabFence
-        WRITE setTabFence NOTIFY controlFlagsChanged FINAL )
+    Q_PROPERTY( bool visibleToLayout READ isVisibleToLayout )
 
-    Q_PROPERTY( QMarginsF margins READ margins WRITE setMargins RESET resetMargins )
+    Q_PROPERTY( QskMargins margins READ margins
+        WRITE setMargins RESET resetMargins NOTIFY marginsChanged )
+
+    Q_PROPERTY( QskGradient background READ background
+        WRITE setBackground RESET resetBackground NOTIFY backgroundChanged )
 
     Q_PROPERTY( QskSizePolicy sizePolicy READ sizePolicy WRITE setSizePolicy )
+
     Q_PROPERTY( QSizeF minimumSize READ minimumSize WRITE setMinimumSize )
     Q_PROPERTY( QSizeF maximumSize READ maximumSize WRITE setMaximumSize )
     Q_PROPERTY( QSizeF preferredSize READ preferredSize WRITE setPreferredSize )
+    Q_PROPERTY( QSizeF sizeConstraint READ sizeConstraint )
 
-#if 0
-    Q_PROPERTY(Qt::FocusPolicy focusPolicy READ focusPolicy
-        WRITE setFocusPolicy NOTIFY focusPolicyChanged FINAL)
-#endif
+    using Inherited = QskQuickItem;
 
-    using Inherited = QQuickItem;
-
-public:
+  public:
     QSK_STATES( Disabled, Hovered, Focused )
 
-    enum Flag
+    enum LayoutHint
     {
-        DeferredUpdate          =  1 << 0,
-        DeferredPolish          =  1 << 1,
-        DeferredLayout          =  1 << 2,
-        CleanupOnVisibility     =  1 << 3,
+        // How to be treated by layouts
+        RetainSizeWhenHidden = 1 << 0,
 
-        PreferRasterForTextures =  1 << 4,
-
-        DebugForceBackground    =  1 << 7,
-
-        LastFlag = DebugForceBackground
+        /*
+            Adjust the item even, even when being hidden
+            Depending on the type of layout the value only works
+            in combination with RetainSizeWhenHidden
+         */
+        LayoutWhenHidden = 1 << 1
     };
 
-    Q_ENUM( Flag )
-    Q_DECLARE_FLAGS( Flags, Flag )
+    Q_ENUM( LayoutHint )
+    Q_DECLARE_FLAGS( LayoutHints, LayoutHint )
 
     QskControl( QQuickItem* parent = nullptr );
-    virtual ~QskControl();
-
-    const char* className() const;
+    ~QskControl() override;
 
     void setMargins( qreal );
     void setMargins( const QMarginsF& );
@@ -92,169 +83,184 @@ public:
 
     void setBackgroundColor( const QColor& );
 
-    QRectF geometry() const;
-    QRectF contentsRect() const;
+    void setBackground( const QskGradient& );
+    void resetBackground();
+    QskGradient background() const;
 
-    virtual QRectF layoutRect() const;
+    QRectF contentsRect() const;
+    QRectF layoutRect() const;
+
+    virtual QRectF layoutRectForSize( const QSizeF& ) const;
     virtual QRectF gestureRect() const;
+
+    virtual QRectF focusIndicatorRect() const;
+    virtual QRectF focusIndicatorClipRect() const;
+
+    using QskSkinnable::subControlRect;
+    QRectF subControlRect( QskAspect::Subcontrol ) const;
+    QRectF subControlRect( const QSizeF&, QskAspect::Subcontrol ) const;
+
+    using QskSkinnable::subControlContentsRect;
+    QRectF subControlContentsRect( QskAspect::Subcontrol ) const;
+    QRectF subControlContentsRect( const QSizeF&, QskAspect::Subcontrol ) const;
 
     void setAutoFillBackground( bool );
     bool autoFillBackground() const;
 
-    void setPolishOnResize( bool );
-    bool polishOnResize() const;
-
     void setAutoLayoutChildren( bool );
     bool autoLayoutChildren() const;
 
-    void setTransparentForPositioner( bool );
-    bool isTransparentForPositioner() const;
+    void setWheelEnabled( bool );
+    bool isWheelEnabled() const;
 
-    static bool isTransparentForPositioner( const QQuickItem* );
+    void setFocusPolicy( Qt::FocusPolicy );
+    Qt::FocusPolicy focusPolicy() const;
 
-    static const QSGNode* itemNode( const QQuickItem* );
-    static const QSGNode* paintNode( const QQuickItem* );
+    void setSizePolicy( QskSizePolicy::Policy, QskSizePolicy::Policy );
+    void setSizePolicy( QskSizePolicy );
+    void setSizePolicy( Qt::Orientation, QskSizePolicy::Policy );
 
-    void setTabFence( bool );
-    bool isTabFence() const;
+    QskSizePolicy sizePolicy() const;
+    QskSizePolicy::Policy sizePolicy( Qt::Orientation ) const;
 
-    void setControlFlags( Flags );
-    void resetControlFlags();
-    Flags controlFlags() const;
+    // hints for how to be treated by layouts
+    void setLayoutAlignmentHint( Qt::Alignment );
+    Qt::Alignment layoutAlignmentHint() const;
 
-    Q_INVOKABLE void setControlFlag( Flag, bool on = true );
-    Q_INVOKABLE void resetControlFlag( Flag );
-    Q_INVOKABLE bool testControlFlag( Flag ) const;
+    void setLayoutHint( LayoutHint, bool on = true );
+    bool testLayoutHint( LayoutHint ) const;
+
+    void setLayoutHints( LayoutHints );
+    LayoutHints layoutHints() const;
+
+    bool isVisibleToLayout() const;
+
+    void setMinimumSize( const QSizeF& );
+    void setMinimumSize( qreal width, qreal height );
+    void setMinimumWidth( qreal width );
+    void setMinimumHeight( qreal height );
+
+    void setMaximumSize( const QSizeF& );
+    void setMaximumSize( qreal width, qreal height );
+    void setMaximumWidth( qreal width );
+    void setMaximumHeight( qreal height );
+
+    void setPreferredSize( const QSizeF& );
+    void setPreferredSize( qreal width, qreal height );
+    void setPreferredWidth( qreal width );
+    void setPreferredHeight( qreal height );
+
+    void setFixedSize( const QSizeF& );
+    void setFixedSize( qreal width, qreal height );
+    void setFixedWidth( qreal width );
+    void setFixedHeight( qreal height );
+
+    void setExplicitSizeHint( Qt::SizeHint, const QSizeF& );
+    void setExplicitSizeHint( Qt::SizeHint, qreal width, qreal height );
+    void resetExplicitSizeHint( Qt::SizeHint );
+
+    QSizeF minimumSize() const;
+    QSizeF maximumSize() const;
+    QSizeF preferredSize() const;
+
+    QSizeF explicitSizeHint( Qt::SizeHint ) const;
+    QSizeF implicitSizeHint( Qt::SizeHint, const QSizeF& constraint ) const;
 
     QSizeF sizeHint() const;
-    QSizeF effectiveConstraint( Qt::SizeHint ) const;
+    qreal heightForWidth( qreal width ) const;
+    qreal widthForHeight( qreal height ) const;
 
-    virtual QSizeF contentsSizeHint() const;
+    QSizeF effectiveSizeHint( Qt::SizeHint,
+        const QSizeF& constraint = QSizeF() ) const;
+
+    QSizeF sizeConstraint( Qt::SizeHint, const QSizeF& constraint = QSizeF() ) const;
+    QSizeF sizeConstraint() const;
 
     QLocale locale() const;
     void resetLocale();
 
-    void setLayoutMirroring( bool on, bool recursive = false );
-    void resetLayoutMirroring();
-    bool layoutMirroring() const;
-
-    QSizeF size() const;
-    QSizeF implicitSize() const;
-
-    void setGeometry( qreal x, qreal y, qreal width, qreal height );
-
-    bool isPolishScheduled() const;
-    bool isUpdateNodeScheduled() const;
-    bool isInitiallyPainted() const;
-
     QVector< QskAspect::Subcontrol > subControls() const;
 
-Q_SIGNALS:
+  Q_SIGNALS:
+    void backgroundChanged();
+    void marginsChanged( const QMarginsF& );
+    void focusIndicatorRectChanged();
     void localeChanged( const QLocale& );
-    void controlFlagsChanged();
-    // ### No additional signals can be added without finding a runtime
-    // metaobject replacement solution for the wrapped QQuickItem subclasses.
+    void focusPolicyChanged();
+    void wheelEnabledChanged();
 
-public Q_SLOTS:
-    void setGeometry( const QRectF& );
+  public Q_SLOTS:
     void setLocale( const QLocale& );
 
-    void show();
-    void hide();
-    void setVisible( bool );
+  protected:
+    bool event( QEvent* ) override;
 
-    void resetImplicitSize();
-
-protected:
-    QskControl( QQuickItemPrivate&, QQuickItem* parent = nullptr );
-
-    virtual bool event( QEvent* ) override;
-    virtual void changeEvent( QEvent* );
-    virtual void geometryChangeEvent( QskGeometryChangeEvent* );
-    virtual void windowChangeEvent( QskWindowChangeEvent* );
     virtual void gestureEvent( QskGestureEvent* );
 
-    virtual void hoverEnterEvent( QHoverEvent* ) override;
-    virtual void hoverLeaveEvent( QHoverEvent* ) override;
+    void hoverEnterEvent( QHoverEvent* ) override;
+    void hoverLeaveEvent( QHoverEvent* ) override;
 
+    bool childMouseEventFilter( QQuickItem*, QEvent* ) override;
     virtual bool gestureFilter( QQuickItem*, QEvent* );
 
-    virtual void itemChange( ItemChange, const ItemChangeData& ) override;
-    virtual void classBegin() override;
-    virtual void componentComplete() override;
-    virtual void releaseResources() override;
+    void itemChange( ItemChange, const ItemChangeData& ) override;
+    void geometryChange( const QRectF&, const QRectF& ) override;
 
-    virtual void geometryChanged( const QRectF&, const QRectF& ) override;
+    void initSizePolicy( QskSizePolicy::Policy, QskSizePolicy::Policy );
 
-    void cleanupNodes();
+    // called from updatePolish
+    virtual void updateResources();
+    virtual void updateLayout();
 
-    virtual void updateLayout(); // called in updatePolish
+    virtual QSizeF contentsSizeHint( Qt::SizeHint, const QSizeF& ) const;
+    virtual QSizeF layoutSizeHint( Qt::SizeHint, const QSizeF& ) const;
 
-private Q_SLOTS:
-    void onImplicitSizeChanged();
-    void updateControlFlags();
+  private:
+    void setActiveFocusOnTab( bool ) = delete;                 // use setFocusPolicy
+    void updateInputMethod( Qt::InputMethodQueries ) = delete; // use qskUpdateInputMethod
 
-private:
-    virtual bool childMouseEventFilter( QQuickItem*, QEvent* ) override;
+    QSGNode* updateItemPaintNode( QSGNode* ) override final;
+    void updateItemPolish() override final;
 
-    virtual QSGNode* updatePaintNode( QSGNode*, UpdatePaintNodeData* ) override final;
-    virtual void updatePolish() override final;
+    QskControl* owningControl() const override final;
 
-    virtual QskControl* owningControl() const override final;
-    virtual void layoutConstraintChanged() override final;
-
-    void updateImplicitSize();
-
-    void updateControlFlag( uint flag, bool on );
-    void updateControlFlags( Flags );
-
-    void setupImplicitSizeConnections( bool );
-
-private:
-    friend bool qskInheritLocale( QskControl*, const QLocale& );
-    friend void qskResolveLocale( QskControl* );
-
-    QLocale m_locale;
-
-    quint16 m_controlFlags;
-    quint16 m_controlFlagsMask;
-
-    bool m_explicitLocale : 1;
-
-    bool m_autoFillBackground : 1;
-    bool m_autoLayoutChildren : 1;
-    bool m_polishOnResize : 1;
-
-    bool m_blockedPolish : 1;
-    bool m_blockedImplicitSize : 1;
-    bool m_clearPreviousNodes : 1;
-
-    bool m_isInitiallyPainted : 1;
-
+  private:
     Q_DECLARE_PRIVATE( QskControl )
 };
 
-inline void QskControl::setGeometry( const QRectF& rect )
+inline QSizeF QskControl::sizeConstraint() const
 {
-    setGeometry( rect.x(), rect.y(), rect.width(), rect.height() );
-}
-
-inline QSizeF QskControl::size() const
-{
-    return QSizeF( width(), height() );
-}
-
-inline QSizeF QskControl::implicitSize() const
-{
-    return QSizeF( implicitWidth(), implicitHeight() );
+    return sizeConstraint( Qt::PreferredSize, QSizeF() );
 }
 
 inline QSizeF QskControl::sizeHint() const
 {
-    return effectiveConstraint( Qt::PreferredSize );
+    return effectiveSizeHint( Qt::PreferredSize );
 }
 
-Q_DECLARE_OPERATORS_FOR_FLAGS( QskControl::Flags )
-Q_DECLARE_METATYPE( QskControl::Flags )
+inline QSizeF QskControl::minimumSize() const
+{
+    return effectiveSizeHint( Qt::MinimumSize );
+}
+
+inline QSizeF QskControl::maximumSize() const
+{
+    return effectiveSizeHint( Qt::MaximumSize );
+}
+
+inline QSizeF QskControl::preferredSize() const
+{
+    return effectiveSizeHint( Qt::PreferredSize );
+}
+
+inline QskControl* qskControlCast( QObject* object )
+{
+    return qobject_cast< QskControl* >( object );
+}
+
+inline const QskControl* qskControlCast( const QObject* object )
+{
+    return qobject_cast< const QskControl* >( object );
+}
 
 #endif

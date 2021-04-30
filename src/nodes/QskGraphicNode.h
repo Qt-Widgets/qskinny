@@ -6,25 +6,27 @@
 #ifndef QSK_GRAPHIC_NODE_H
 #define QSK_GRAPHIC_NODE_H
 
-#include "QskGlobal.h"
+#include "QskTextureRenderer.h"
 #include "QskTextureNode.h"
-#include "QskGraphicTextureFactory.h"
 
 class QskGraphic;
 class QskColorFilter;
+class QQuickWindow;
 
 class QSK_EXPORT QskGraphicNode : public QskTextureNode
 {
-public:
+  public:
     QskGraphicNode();
-    virtual ~QskGraphicNode();
+    ~QskGraphicNode() override;
 
-    void setGraphic( const QskGraphic&, const QskColorFilter&,
-        QskGraphicTextureFactory::RenderMode, const QRect& );
+    void setGraphic( QQuickWindow*,
+        const QskGraphic&, const QskColorFilter&,
+        QskTextureRenderer::RenderMode, const QRectF&,
+        Qt::Orientations mirrored = Qt::Orientations() );
 
-private:
-    void setTextureId( int ) = delete;
-    void setRect(const QRectF& ) = delete;
+  private:
+    void setTexture( QQuickWindow*,
+        const QRectF&, uint id, Qt::Orientations ) = delete;
 
     uint m_hash;
 };

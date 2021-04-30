@@ -5,32 +5,34 @@
 
 #include "MainWindow.h"
 
-#include <QskGraphic.h>
-#include <QskGraphicLabel.h>
-#include <QskGraphicIO.h>
-#include <QskPushButton.h>
-#include <QskLinearBox.h>
-#include <QskColorFilter.h>
+#include <QskAnimationHint.h>
 #include <QskAspect.h>
-#include <QskTabView.h>
+#include <QskColorFilter.h>
+#include <QskGradient.h>
+#include <QskGraphic.h>
+#include <QskGraphicIO.h>
+#include <QskGraphicLabel.h>
+#include <QskLinearBox.h>
+#include <QskPushButton.h>
+#include <QskRgbValue.h>
 #include <QskSetup.h>
 #include <QskSkin.h>
-#include <QskAnimationHint.h>
+#include <QskTabView.h>
 
 #include <QDir>
 #include <QVariant>
 
 class GraphicLabel : public QskGraphicLabel
 {
-public:
+  public:
     enum Role
     {
         Normal,
         Inverted
     };
 
-    GraphicLabel( const QskGraphic& graphic, QQuickItem* parent = nullptr ):
-        QskGraphicLabel( graphic, parent )
+    GraphicLabel( const QskGraphic& graphic, QQuickItem* parent = nullptr )
+        : QskGraphicLabel( graphic, parent )
     {
         setAlignment( Qt::AlignCenter );
         setAutoFillBackground( true );
@@ -40,59 +42,57 @@ public:
 
     void setDarknessMode( bool on )
     {
-        using namespace QskAspect;
+        const int oldRole = graphicRole();
 
-        const QskAspect::Aspect aspectRole = QskGraphicLabel::Graphic | GraphicRole;
-
-        const QVariant oldRole = storedSkinHint( aspectRole );
-
-        QRgb rgb;
+        QskGradient gradient;
         if ( on )
         {
-            rgb = qRgb( 40, 40, 40 );
-            setFlagHint( aspectRole, Inverted );
+            gradient.setColor( qRgb( 40, 40, 40 ) );
+            setGraphicRole( Inverted );
         }
         else
         {
-            rgb = qRgb( 255, 228, 181 );
-            setFlagHint( aspectRole, Normal );
+            gradient.setColor( QskRgb::Wheat );
+            setGraphicRole( Normal );
         }
 
         const int duration = 500;
 
-        for ( auto edge : { TopEdge, BottomEdge } )
-        {
-            const Aspect aspectColor = Control | Color | Background | edge;
+        const QskGradient oldGradient = background();
 
-            const auto oldColor = storedSkinHint( aspectColor );
-            setColor( aspectColor, rgb );
-            startTransition( aspectColor, duration, oldColor, storedSkinHint( aspectColor ) );
-        }
+        setBackground( gradient );
 
-        startTransition( aspectRole, duration, oldRole, storedSkinHint( aspectRole ) );
+        // finally setup a smooth transition manually
+        startTransition( QskAspect::Control | QskAspect::Color, duration,
+            QVariant::fromValue( oldGradient ), QVariant::fromValue( gradient ) );
+
+        startTransition( QskGraphicLabel::Graphic | QskAspect::GraphicRole,
+            duration, oldRole, graphicRole() );
     }
 };
 
 MainWindow::MainWindow()
 {
-    m_tabView = new QskTabView( Qt::Horizontal );
+    m_tabView = new QskTabView( Qsk::Left );
 
     const QString resourceDir( ":/qvg" );
     const QStringList icons = QDir( resourceDir ).entryList();
 
-    for ( auto icon : icons )
+    for ( const auto& icon : icons )
     {
-        m_tabView->addTab( icon.replace( ".qvg", "" ),
+        auto title = icon;
+        m_tabView->addTab( title.replace( ".qvg", "" ),
             new GraphicLabel( QskGraphicIO::read( resourceDir + "/" + icon ) ) );
     }
 
     auto invertButton = new QskPushButton( "Inverted" );
     invertButton->setSizePolicy( Qt::Horizontal, QskSizePolicy::Fixed );
     invertButton->setCheckable( true );
+    invertButton->setLayoutAlignmentHint( Qt::AlignRight );
 
     auto box = new QskLinearBox( Qt::Vertical );
     box->setMargins( 5 );
-    box->addItem( invertButton, Qt::AlignRight );
+    box->addItem( invertButton );
     box->addItem( m_tabView );
 
     addItem( box );

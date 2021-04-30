@@ -4,107 +4,188 @@
  *****************************************************************************/
 
 #include "QskBoxNode.h"
-#include "QskBoxOptions.h"
-#include "QskAspect.h"
+#include "QskBoxBorderColors.h"
+#include "QskBoxBorderMetrics.h"
+#include "QskBoxRenderer.h"
+#include "QskBoxShapeMetrics.h"
+#include "QskGradient.h"
 
-#include <qhashfunctions.h>
+#include <qglobalstatic.h>
+#include <qsgflatcolormaterial.h>
+#include <qsgvertexcolormaterial.h>
 
-static inline Qt::Edge qskAspectToEdge( QskAspect::Edge edge )
+Q_GLOBAL_STATIC( QSGVertexColorMaterial, qskMaterialVertex )
+
+static inline uint qskMetricsHash(
+    const QskBoxShapeMetrics& shape, const QskBoxBorderMetrics& borderMetrics )
 {
-    switch ( edge )
-    {
-        case QskAspect::LeftEdge:
-            return Qt::LeftEdge;
+    uint hash = 13000;
 
-        case QskAspect::TopEdge:
-            return Qt::TopEdge;
-
-        case QskAspect::RightEdge:
-            return Qt::RightEdge;
-
-        case QskAspect::BottomEdge:
-            return Qt::BottomEdge;
-
-        default:
-            break;
-    }
-    return static_cast< Qt::Edge >( 0 );
+    hash = shape.hash( hash );
+    return borderMetrics.hash( hash );
 }
 
-QskBoxNode::QskBoxNode():
-    m_metricsHash( 0 ),
-    m_colorsHash( 0 )
+static inline uint qskColorsHash(
+    const QskBoxBorderColors& borderColors, const QskGradient& fillGradient )
 {
+    uint hash = 13000;
+    hash = borderColors.hash( hash );
+    return fillGradient.hash( hash );
+}
+
+QskBoxNode::QskBoxNode()
+    : m_metricsHash( 0 )
+    , m_colorsHash( 0 )
+    , m_geometry( QSGGeometry::defaultAttributes_ColoredPoint2D(), 0 )
+{
+    setMaterial( qskMaterialVertex );
     setGeometry( &m_geometry );
-    setMaterial( &m_material );
 }
 
 QskBoxNode::~QskBoxNode()
 {
-#if VM_SUPPORT
-    if ( m_metricsHash > 0 )
-        m_material.release( m_metricsHash );
-#endif
+    if ( material() != qskMaterialVertex )
+        delete material();
 }
 
-void QskBoxNode::setBoxData( const QRectF& rect, const QskBoxOptions& options )
+void QskBoxNode::setBoxData( const QRectF& rect, const QskGradient& fillGradient )
 {
-    using namespace QskAspect;
-
-    const uint metricsHash = options.metricsHash();
-    const uint colorsHash = options.colorsHash();
-
-    QSGNode::DirtyState dirtyState = 0;
-
-    if ( !m_material.isValid() || ( metricsHash != m_metricsHash ) )
-    {
-#if VM_SUPPORT
-        if ( m_metricsHash > 0 )
-            m_material.release( m_metricsHash );
-#endif
-        m_material.setBoxOptions( options );
-        dirtyState |= QSGNode::DirtyMaterial;
-    }
-
-    if ( ( rect != m_rect ) || ( metricsHash != m_metricsHash ) )
-    {
-        m_geometry.setBorder( rect, options.unitedMargins(),
-            m_material.textureCoordinates(), m_material.textureSize() );
-
-        dirtyState |= QSGNode::DirtyGeometry;
-
-        m_metricsHash = metricsHash;
-        m_rect = rect;
-    }
-
-    if ( colorsHash != m_colorsHash )
-    {
-        m_geometry.setEdgeBackground( Qt::LeftEdge,
-            options.color.fillTopLeft, options.color.fillBottomLeft );
-
-        m_geometry.setEdgeBackground( Qt::TopEdge,
-            options.color.fillTopLeft, options.color.fillTopRight );
-
-        m_geometry.setEdgeBackground( Qt::RightEdge,
-            options.color.fillTopRight, options.color.fillBottomRight );
-
-        m_geometry.setEdgeBackground( Qt::BottomEdge,
-            options.color.fillBottomLeft, options.color.fillBottomRight );
-
-        m_geometry.setEdgeForeground( qskAspectToEdge( LeftEdge ), options.color.borderLeft );
-        m_geometry.setEdgeForeground( qskAspectToEdge( TopEdge ), options.color.borderTop );
-        m_geometry.setEdgeForeground( qskAspectToEdge( RightEdge ), options.color.borderRight );
-        m_geometry.setEdgeForeground( qskAspectToEdge( BottomEdge ), options.color.borderBottom );
-
-        dirtyState |= QSGNode::DirtyGeometry;
-        m_colorsHash = colorsHash;
-    }
-
-    if ( dirtyState )
-        markDirty( dirtyState );
+    setBoxData( rect, QskBoxShapeMetrics(), QskBoxBorderMetrics(),
+        QskBoxBorderColors(), fillGradient );
 }
 
-QRectF QskBoxNode::rect() const
+void QskBoxNode::setBoxData( const QRectF& rect,
+    const QskBoxShapeMetrics& shape, const QskBoxBorderMetrics& borderMetrics,
+    const QskBoxBorderColors& borderColors, const QskGradient& fillGradient )
 {
-    return m_rect;
+#if 1
+    const uint metricsHash = qskMetricsHash( shape, borderMetrics );
+    const uint colorsHash = qskColorsHash( borderColors, fillGradient );
+
+    if ( ( metricsHash == m_metricsHash ) &&
+        ( colorsHash == m_colorsHash ) && ( rect == m_rect ) )
+    {
+        return;
+    }
+
+    m_metricsHash = metricsHash;
+    m_colorsHash = colorsHash;
+    m_rect = rect;
+
+    markDirty( QSGNode::DirtyMaterial );
+    markDirty( QSGNode::DirtyGeometry );
+#endif
+
+    if ( rect.isEmpty() )
+    {
+        m_geometry.allocate( 0 );
+        return;
+    }
+
+    bool hasFill = fillGradient.isValid();
+
+    bool hasBorder = !borderMetrics.isNull();
+    if ( hasBorder )
+    {
+        /*
+            Wrong as the border width should have an
+            effect - even if not being visible. TODO ...
+         */
+
+        hasBorder = borderColors.isVisible();
+    }
+
+    if ( !hasBorder && !hasFill )
+    {
+        m_geometry.allocate( 0 );
+        return;
+    }
+
+    const bool isFillMonochrome = hasFill ? fillGradient.isMonochrome() : true;
+    const bool isBorderMonochrome = hasBorder ? borderColors.isMonochrome() : true;
+
+    if ( hasFill && hasBorder )
+    {
+        if ( isFillMonochrome && isBorderMonochrome )
+        {
+            if ( borderColors.color( Qsk::Left ) == fillGradient.startColor() )
+            {
+                // we can draw border and background in one
+                hasBorder = false;
+            }
+        }
+    }
+
+    bool maybeFlat = false;
+
+    /*
+        Always using the same material result in a better batching
+        but wastes some memory. when we have a solid color.
+        Maybe its worth to introduce a flag to control the behaviour,
+        but for the moment we go with performance.
+     */
+
+    if ( maybeFlat )
+    {
+        if ( ( hasFill && hasBorder ) ||
+            ( hasFill && !isFillMonochrome ) ||
+            ( hasBorder && !isBorderMonochrome ) )
+        {
+            maybeFlat = false;
+        }
+    }
+
+    QskBoxRenderer renderer;
+
+    if ( !maybeFlat )
+    {
+        setMonochrome( false );
+
+        renderer.renderBox( m_rect, shape, borderMetrics,
+            borderColors, fillGradient, *geometry() );
+    }
+    else
+    {
+        // all is done with one color
+        setMonochrome( true );
+
+        auto* flatMaterial = static_cast< QSGFlatColorMaterial* >( material() );
+
+        if ( hasFill )
+        {
+            flatMaterial->setColor( fillGradient.startColor() );
+            renderer.renderFill( m_rect, shape, QskBoxBorderMetrics(), *geometry() );
+        }
+        else
+        {
+            flatMaterial->setColor( borderColors.color( Qsk::Left ).rgba() );
+            renderer.renderBorder( m_rect, shape, borderMetrics, *geometry() );
+        }
+    }
+}
+
+void QskBoxNode::setMonochrome( bool on )
+{
+    const auto material = this->material();
+
+    if ( on == ( material != qskMaterialVertex ) )
+        return;
+
+    m_geometry.allocate( 0 );
+
+    if ( on )
+    {
+        setMaterial( new QSGFlatColorMaterial() );
+
+        const QSGGeometry g( QSGGeometry::defaultAttributes_Point2D(), 0 );
+        memcpy( ( void* ) &m_geometry, ( void* ) &g, sizeof( QSGGeometry ) );
+    }
+    else
+    {
+        setMaterial( qskMaterialVertex );
+        delete material;
+
+        const QSGGeometry g( QSGGeometry::defaultAttributes_ColoredPoint2D(), 0 );
+        memcpy( ( void* ) &m_geometry, ( void* ) &g, sizeof( QSGGeometry ) );
+    }
 }

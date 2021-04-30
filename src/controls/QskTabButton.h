@@ -16,18 +16,19 @@ class QSK_EXPORT QskTabButton : public QskAbstractButton
     Q_OBJECT
 
     Q_PROPERTY( QString text READ text WRITE setText NOTIFY textChanged FINAL )
+
     Q_PROPERTY( QskTextOptions textOptions READ textOptions
         WRITE setTextOptions NOTIFY textOptionsChanged )
 
     using Inherited = QskAbstractButton;
 
-public:
+  public:
     QSK_SUBCONTROLS( Panel, Text )
 
     QskTabButton( QQuickItem* parent = nullptr );
     QskTabButton( const QString& text, QQuickItem* parent = nullptr );
 
-    virtual ~QskTabButton();
+    ~QskTabButton() override;
 
     void setText( const QString& text );
     QString text() const;
@@ -35,20 +36,21 @@ public:
     void setTextOptions( const QskTextOptions& );
     QskTextOptions textOptions() const;
 
-    virtual QSizeF contentsSizeHint() const override;
+    QRectF layoutRectForSize( const QSizeF& ) const override;
 
-    QskTabBar* tabBar() const;
+    QskAspect::Placement effectivePlacement() const override;
 
-Q_SIGNALS:
+    const QskTabBar* tabBar() const;
+    QskTabBar* tabBar();
+
+  Q_SIGNALS:
     void textChanged( const QString& text );
     void textOptionsChanged();
 
-protected:
-    virtual void changeEvent( QEvent* ) override;
+  protected:
+    void changeEvent( QEvent* ) override;
 
-private:
-    void resolveTabBar();
-
+  private:
     class PrivateData;
     std::unique_ptr< PrivateData > m_data;
 };

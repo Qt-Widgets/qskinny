@@ -4,216 +4,48 @@
  *****************************************************************************/
 
 #include "QskTextRenderer.h"
-#include <QQuickWindow>
+#include "QskPlainTextRenderer.h"
+#include "QskRichTextRenderer.h"
+#include "QskTextOptions.h"
 
-QSK_QT_PRIVATE_BEGIN
-#include <private/qquicktext_p.h>
-#include <private/qquicktext_p_p.h>
-QSK_QT_PRIVATE_END
-
-#include <limits>
-
-class QskTextHelperItem final : public QQuickText
-{
-public:
-    QskTextHelperItem();
-
-    void refWindow( QQuickWindow* window );
-    void derefWindow();
-
-    void begin();
-    void end();
-
-    QRectF layedOutTextRect() const;
-    void updateTextNode( QQuickWindow*, QSGNode* );
-
-protected:
-    virtual QSGNode* updatePaintNode(
-        QSGNode*, UpdatePaintNodeData* ) override final;
-};
-
-QskTextHelperItem::QskTextHelperItem():
-    QQuickText( nullptr )
-{
-}
-
-QRectF QskTextHelperItem::layedOutTextRect() const
-{
-    auto that = const_cast< QskTextHelperItem* >( this );
-    return QQuickTextPrivate::get( that )->layedOutTextRect;
-}
-
-void QskTextHelperItem::updateTextNode( QQuickWindow* window, QSGNode* parentNode )
-{
-    QQuickItemPrivate::get( this )->refWindow( window );
-
-    while ( parentNode->firstChild() )
-        delete parentNode->firstChild(); // This is done in QQuickText::updatePaintNode anyway
-
-    auto node = QQuickText::updatePaintNode( nullptr, nullptr );
-    node->reparentChildNodesTo( parentNode );
-    delete node;
-
-    QQuickItemPrivate::get( this )->derefWindow();
-}
-
-void QskTextHelperItem::begin()
-{
-    classBegin();
-}
-
-void QskTextHelperItem::end()
-{
-    componentComplete();
-}
-
-QSGNode* QskTextHelperItem::updatePaintNode( QSGNode*, UpdatePaintNodeData* )
-{
-    // should never be called
-    return nullptr;
-}
+#include <qrect.h>
 
 /*
-    size requests and rendering might be from different threads and we
-    better use different items as we might end up in events internally
-    being sent, that leads to crashes because of it
+    Since Qt 5.7 QQuickTextNode is exported as Q_QUICK_PRIVATE_EXPORT
+    and could be used. TODO ...
  */
-static QskTextHelperItem* qskRenderHelper = nullptr;
-static QskTextHelperItem* qskLayoutHelper = nullptr;
-
-void QskTextRenderer::setFont( const QFont& font )
+QSizeF QskTextRenderer::textSize(
+    const QString& text, const QFont& font, const QskTextOptions& options )
 {
-    m_font = font;
+    if ( options.effectiveFormat( text ) == QskTextOptions::PlainText )
+        return QskPlainTextRenderer::textSize( text, font, options );
+    else
+        return QskRichTextRenderer::textSize( text, font, options );
 }
 
-void QskTextRenderer::setOptions( const QskTextOptions& options )
+QSizeF QskTextRenderer::textSize(
+    const QString& text, const QFont& font, const QskTextOptions& options,
+    const QSizeF& size )
 {
-    m_options = options;
+    if ( options.effectiveFormat( text ) == QskTextOptions::PlainText )
+        return QskPlainTextRenderer::textRect( text, font, options, size ).size();
+    else
+        return QskRichTextRenderer::textRect( text, font, options, size ).size();
 }
 
-void QskTextRenderer::setAlignment( Qt::Alignment alignment )
+void QskTextRenderer::updateNode(
+    const QString& text, const QFont& font, const QskTextOptions& options,
+    Qsk::TextStyle style, const QskTextColors& colors, Qt::Alignment alignment,
+    const QRectF& rect, const QQuickItem* item, QSGTransformNode* node )
 {
-    m_alignment = alignment;
-}
-
-QSizeF QskTextRenderer::implicitSizeHint( const QString& text ) const
-{
-    if ( qskLayoutHelper == NULL )
-        qskLayoutHelper = new QskTextHelperItem();
-
-    QskTextHelperItem& textItem = *qskLayoutHelper;
-
-    textItem.begin();
-
-    setupItem( &textItem );
-
-    textItem.setWidth( -1 );
-    textItem.setText( text );
-
-    textItem.end();
-
-    return QSizeF( textItem.implicitWidth(), textItem.implicitHeight() );
-}
-
-QRectF QskTextRenderer::textRect( const QSizeF& size, const QString& text ) const
-{
-    if ( qskLayoutHelper == NULL )
-        qskLayoutHelper = new QskTextHelperItem();
-
-    QskTextHelperItem& textItem = *qskLayoutHelper;
-
-    textItem.begin();
-
-    setupItem( &textItem );
-
-    textItem.setWidth( size.width() );
-    textItem.setHeight( size.height() );
-
-    textItem.setText( text );
-
-    textItem.end();
-
-    return textItem.layedOutTextRect();
-}
-
-void QskTextRenderer::setupItem( QskTextHelperItem* textItem ) const
-{
-#if 0
-    textItem->setAntialiasing( true );
-    textItem->setRenderType( QQuickText::QtRendering );
-    textItem->setPadding( 0 );
-#endif
-
-    textItem->setHAlign( ( QQuickText::HAlignment ) ( int( m_alignment ) & 0x0f ) );
-    textItem->setVAlign( ( QQuickText::VAlignment ) ( int( m_alignment ) & 0xf0 ) );
-
-    // fonts are supposed to be defined in the application skin and we
-    // probably don't want to have them scaled
-    textItem->setFont( m_font );
-    textItem->setFontSizeMode( QQuickText::FixedSize );
-
-#if 0
-    textItem->setMinimumPixelSize();
-    textItem->setMinimumPointSize();
-#endif
-
-    textItem->setTextFormat( ( QQuickText::TextFormat ) m_options.format() );
-    textItem->setElideMode( ( QQuickText::TextElideMode ) m_options.elideMode() );
-    textItem->setMaximumLineCount( m_options.maximumLineCount() );
-    textItem->setWrapMode( static_cast< QQuickText::WrapMode >( m_options.wrapMode() ) );
-
-    // what about Qt::TextShowMnemonic ???
-
-#if 0
-    // also something, that should be defined in an application skin
-    textItem->setLineHeightMode( ... );
-    textItem->setLineHeight();
-#endif
-}
-
-void QskTextRenderer::updateNode( const QQuickItem* item,
-    const QRectF& rect, const QString& text, QSGTransformNode* parentNode,
-    const QColor& textColor, Qsk::TextStyle style, const QColor& styleColor,
-    const QColor& linkColor )
-{
-    // are we killing internal caches of QQuickText, when always using
-    // the same item for the creation the text nodes ???
-
-    if ( qskRenderHelper == NULL )
-        qskRenderHelper = new QskTextHelperItem();
-
-    QskTextHelperItem& textItem = *qskRenderHelper;
-
-    textItem.begin();
-
-    setupItem( &textItem );
-
-#if 0
-    // the position of textItem seems to have no effect
-    // on the position of the node. We do it by translation later.
-
-    textItem.setX( rect.x() );
-    textItem.setY( rect.y() );
-#endif
-
-    if ( rect.width() != textItem.width() ||
-        rect.height() != textItem.height() )
+    if ( options.format() == QskTextOptions::PlainText )
     {
-        textItem.setWidth( rect.width() );
-        textItem.setHeight( rect.height() );
-        textItem.doLayout();
+        QskPlainTextRenderer::updateNode(
+            text, font, options, style, colors, alignment, rect, item, node );
     }
-
-    textItem.setColor( textColor );
-    textItem.setStyle( static_cast< QQuickText::TextStyle >( style ) );
-    textItem.setStyleColor( styleColor );
-    textItem.setLinkColor( linkColor );
-
-    textItem.setText( text );
-
-    textItem.end();
-
-    textItem.updateTextNode( item->window(), parentNode );
-
-    textItem.setText( QString::null );
+    else
+    {
+        QskRichTextRenderer::updateNode(
+            text, font, options, style, colors, alignment, rect, item, node );
+    }
 }

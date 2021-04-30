@@ -1,8 +1,4 @@
-include( $${PWD}/../examples.pri )
-
-TARGET = messagebox
-
-QT += quick 
+CONFIG += qskexample
 
 SOURCES += \
     main.cpp

@@ -3,15 +3,26 @@
  * This file may be used under the terms of the 3-clause BSD License
  *****************************************************************************/
 
-#ifndef _TEST_RECTANGLE_
-#define _TEST_RECTANGLE_ 1
+#ifndef TEST_RECTANGLE
+#define TEST_RECTANGLE
 
 #include <QskTextLabel.h>
 
 class TestRectangle : public QskTextLabel
 {
-public:
+    Q_OBJECT
+
+    Q_PROPERTY( QString color READ colorName WRITE setColorName )
+
+  public:
+    TestRectangle( QQuickItem* parent = nullptr );
     TestRectangle( const char* colorName, QQuickItem* parent = nullptr );
+
+    void setColorName( const QString& );
+    QString colorName() const;
+
+  private:
+    QString m_colorName;
 };
 
 #endif

@@ -6,12 +6,9 @@
 #ifndef QSK_SLIDER_H
 #define QSK_SLIDER_H
 
-#include "QskRangeControl.h"
+#include "QskBoundedValueInput.h"
 
-class QSGNode;
-class QskSkin;
-
-class QSK_EXPORT QskSlider : public QskRangeControl
+class QSK_EXPORT QskSlider : public QskBoundedValueInput
 {
     Q_OBJECT
 
@@ -21,17 +18,18 @@ class QSK_EXPORT QskSlider : public QskRangeControl
         WRITE setOrientation NOTIFY orientationChanged )
 
     Q_PROPERTY( bool tracking READ isTracking WRITE setTracking NOTIFY trackingChanged )
+    Q_PROPERTY( qreal handlePosition READ handlePosition )
 
-    using Inherited = QskRangeControl;
+    using Inherited = QskBoundedValueInput;
 
-public:
+  public:
     QSK_SUBCONTROLS( Panel, Groove, Fill, Scale, Handle )
     QSK_STATES( Pressed, Minimum, Maximum )
 
     explicit QskSlider( QQuickItem* parent = nullptr );
     explicit QskSlider( Qt::Orientation, QQuickItem* parent = nullptr );
 
-    virtual ~QskSlider();
+    ~QskSlider() override;
 
     bool isPressed() const;
 
@@ -41,23 +39,28 @@ public:
     void setTracking( bool );
     bool isTracking() const;
 
-    virtual QSizeF contentsSizeHint() const override;
+    qreal handlePosition() const; // [0,0, 1.0]
 
-Q_SIGNALS:
+    QskAspect::Placement effectivePlacement() const override;
+
+  Q_SIGNALS:
     void pressedChanged( bool );
     void orientationChanged( Qt::Orientation );
     void trackingChanged( bool );
 
-protected:
-    virtual void mousePressEvent( QMouseEvent* e ) override;
-    virtual void mouseMoveEvent( QMouseEvent* e ) override;
-    virtual void mouseReleaseEvent( QMouseEvent* e ) override;
+  protected:
+    void mousePressEvent( QMouseEvent* e ) override;
+    void mouseMoveEvent( QMouseEvent* e ) override;
+    void mouseReleaseEvent( QMouseEvent* e ) override;
 
     QSizeF handleSize() const;
     QRectF handleRect() const;
 
-private:
-    void updatePosition();
+    void aboutToShow() override;
+
+  private:
+    void moveHandle();
+    void moveHandleTo( qreal value, const QskAnimationHint& );
 
     class PrivateData;
     std::unique_ptr< PrivateData > m_data;

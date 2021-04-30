@@ -6,45 +6,78 @@
 #ifndef QSK_DIALOG_SUB_WINDOW_H
 #define QSK_DIALOG_SUB_WINDOW_H 1
 
-#include "QskGlobal.h"
-#include "QskSubWindow.h"
 #include "QskDialog.h"
+#include "QskSubWindow.h"
+
+class QskDialogButtonBox;
+class QskPushButton;
 
 class QSK_EXPORT QskDialogSubWindow : public QskSubWindow
 {
     Q_OBJECT
 
+    Q_PROPERTY( QskDialog::Actions dialogActions
+        READ dialogActions WRITE setDialogActions )
+
     using Inherited = QskSubWindow;
 
-public:
+  public:
     QskDialogSubWindow( QQuickItem* parent = nullptr );
-    virtual ~QskDialogSubWindow();
+    ~QskDialogSubWindow() override;
 
-    void setDeleteOnDone( bool on );
-    bool deleteOnDone() const;
+    QskDialog::Actions dialogActions() const;
+    void setDialogActions( QskDialog::Actions );
+
+    void addDialogAction( QskDialog::Action );
+    void addDialogButton( QskPushButton*, QskDialog::ActionRole );
+
+    Q_INVOKABLE QskDialog::Action clickedAction() const;
 
     Q_INVOKABLE QskDialog::DialogCode result() const;
     Q_INVOKABLE QskDialog::DialogCode exec();
 
-Q_SIGNALS:
+    void setDefaultDialogAction( QskDialog::Action );
+
+    void setDefaultButton( QskPushButton* );
+    QskPushButton* defaultButton() const;
+
+    QskDialogButtonBox* buttonBox();
+    const QskDialogButtonBox* buttonBox() const;
+
+    void setContentItem( QQuickItem* );
+    QQuickItem* contentItem() const;
+
+    // padding around the contentItem
+    void setContentPadding( const QMarginsF& );
+    QMarginsF contentPadding() const;
+
+  Q_SIGNALS:
     void finished( QskDialog::DialogCode );
     void accepted();
     void rejected();
 
-public Q_SLOTS:
-    void done( QskDialog::DialogCode );
+  public Q_SLOTS:
     void accept();
     void reject();
 
-protected:
-    void setResult( QskDialog::DialogCode r );
-    virtual void keyPressEvent( QKeyEvent* ) override;
+    virtual void done( QskDialog::DialogCode );
 
-    virtual void updateLayout() override;
+  protected:
+    void setResult( QskDialog::DialogCode );
+    void keyPressEvent( QKeyEvent* ) override;
 
-private:
-    QskDialog::DialogCode m_result;
-    bool m_deleteOnDone : 1;
+    void updateLayout() override;
+    void aboutToShow() override;
+
+    QSizeF layoutSizeHint( Qt::SizeHint, const QSizeF& ) const override;
+
+    virtual QskDialogButtonBox* createButtonBox();
+
+  private:
+    void initButtonBox();
+
+    class PrivateData;
+    std::unique_ptr< PrivateData > m_data;
 };
 
 #endif

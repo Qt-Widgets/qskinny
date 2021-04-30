@@ -5,29 +5,25 @@
 
 #include "QskSkin.h"
 
-#include "QskAspect.h"
-#include "QskGraphic.h"
-#include "QskColorFilter.h"
-#include "QskGraphicProviderMap.h"
-#include "QskSetup.h"
 #include "QskAnimationHint.h"
+#include "QskAspect.h"
+#include "QskColorFilter.h"
+#include "QskGraphic.h"
+#include "QskGraphicProviderMap.h"
+#include "QskSkinHintTable.h"
 #include "QskStandardSymbol.h"
 
-#include "QskFocusIndicator.h"
+#include "QskMargins.h"
 
 QSK_QT_PRIVATE_BEGIN
 #include <private/qguiapplication_p.h>
 QSK_QT_PRIVATE_END
 
-#include <qpa/qplatformtheme.h>
 #include <qpa/qplatformdialoghelper.h>
+#include <qpa/qplatformtheme.h>
 
-#include <QtAlgorithms>
-
-#include <algorithm>
-#include <unordered_map>
-#include <unordered_set>
 #include <cmath>
+#include <unordered_map>
 
 #include "QskBox.h"
 #include "QskBoxSkinlet.h"
@@ -37,12 +33,6 @@ QSK_QT_PRIVATE_END
 
 #include "QskGraphicLabel.h"
 #include "QskGraphicLabelSkinlet.h"
-
-#include "QskInputPanel.h"
-#include "QskInputPanelSkinlet.h"
-
-#include "QskLineEdit.h"
-#include "QskLineEditSkinlet.h"
 
 #include "QskListView.h"
 #include "QskListViewSkinlet.h"
@@ -68,6 +58,9 @@ QSK_QT_PRIVATE_END
 #include "QskTextLabel.h"
 #include "QskTextLabelSkinlet.h"
 
+#include "QskTextInput.h"
+#include "QskTextInputSkinlet.h"
+
 #include "QskSeparator.h"
 #include "QskSeparatorSkinlet.h"
 
@@ -80,17 +73,36 @@ QSK_QT_PRIVATE_END
 #include "QskPageIndicator.h"
 #include "QskPageIndicatorSkinlet.h"
 
+#include "QskProgressBar.h"
+#include "QskProgressBarSkinlet.h"
+
 #include "QskStatusIndicator.h"
 #include "QskStatusIndicatorSkinlet.h"
+
+static inline QskSkinlet* qskNewSkinlet( const QMetaObject* metaObject, QskSkin* skin )
+{
+    const QByteArray signature = metaObject->className() + QByteArrayLiteral( "(QskSkin*)" );
+
+    QskSkinlet* skinlet = nullptr;
+
+    const int index = metaObject->indexOfConstructor( signature.constData() );
+    if ( index >= 0 )
+    {
+        void* param[] = { &skinlet, &skin };
+        metaObject->static_metacall( QMetaObject::CreateInstance, index, param );
+    }
+
+    return skinlet;
+}
 
 namespace
 {
     class SkinletData
     {
-    public:
-        SkinletData( const QMetaObject* metaObject ):
-            metaObject( metaObject ),
-            skinlet( nullptr )
+      public:
+        SkinletData( const QMetaObject* metaObject )
+            : metaObject( metaObject )
+            , skinlet( nullptr )
         {
         }
 
@@ -106,17 +118,11 @@ namespace
 
 class QskSkin::PrivateData
 {
-public:
-    PrivateData( QskSkin* skin ):
-        skin( skin )
-    {
-    }
-
-    QskSkin* skin;
+  public:
     std::unordered_map< const QMetaObject*, SkinletData > skinletMap;
 
-    std::unordered_map< QskAspect::Aspect, QVariant > skinHints;
-    std::unordered_map< int, std::set< QskAspect::Aspect > > animatorAspects;
+    QskSkinHintTable hintTable;
+    QskAspect::State stateMask = QskAspect::AllStates;
 
     std::unordered_map< int, QFont > fonts;
     std::unordered_map< int, QskColorFilter > graphicFilters;
@@ -124,17 +130,15 @@ public:
     QskGraphicProviderMap graphicProviders;
 };
 
-QskSkin::QskSkin( QObject* parent ):
-    QObject( parent ),
-    m_data( new PrivateData( this ) )
+QskSkin::QskSkin( QObject* parent )
+    : QObject( parent )
+    , m_data( new PrivateData() )
 {
     declareSkinlet< QskControl, QskSkinlet >();
 
     declareSkinlet< QskBox, QskBoxSkinlet >();
     declareSkinlet< QskFocusIndicator, QskFocusIndicatorSkinlet >();
     declareSkinlet< QskGraphicLabel, QskGraphicLabelSkinlet >();
-    declareSkinlet< QskInputPanel, QskInputPanelSkinlet >();
-    declareSkinlet< QskLineEdit, QskLineEditSkinlet >();
     declareSkinlet< QskListView, QskListViewSkinlet >();
     declareSkinlet< QskPageIndicator, QskPageIndicatorSkinlet >();
     declareSkinlet< QskPopup, QskPopupSkinlet >();
@@ -148,147 +152,42 @@ QskSkin::QskSkin( QObject* parent ):
     declareSkinlet< QskTabButton, QskTabButtonSkinlet >();
     declareSkinlet< QskTabView, QskTabViewSkinlet >();
     declareSkinlet< QskTextLabel, QskTextLabelSkinlet >();
+    declareSkinlet< QskTextInput, QskTextInputSkinlet >();
+    declareSkinlet< QskProgressBar, QskProgressBarSkinlet >();
 
     const QFont font = QGuiApplication::font();
     setupFonts( font.family(), font.weight(), font.italic() );
+
+    {
+        // some defaults
+        const auto noMargins = QVariant::fromValue( QskMargins( 0 ) );
+        const auto aspect = QskAspect::Control | QskAspect::Metric;
+
+        setSkinHint( aspect | QskAspect::Margin, noMargins );
+        setSkinHint( aspect | QskAspect::Padding, noMargins );
+        setSkinHint( aspect | QskAspect::Spacing, 0 );
+    }
 }
 
 QskSkin::~QskSkin()
 {
 }
 
-void QskSkin::setColor( QskAspect::Aspect aspect, QRgb rgb )
+void QskSkin::setSkinHint( QskAspect aspect, const QVariant& skinHint )
 {
-    setSkinHint( aspect | QskAspect::Color, QColor::fromRgba( rgb ) );
+    m_data->hintTable.setHint( aspect, skinHint );
 }
 
-void QskSkin::setColor( QskAspect::Aspect aspect, Qt::GlobalColor color )
+const QVariant& QskSkin::skinHint( QskAspect aspect ) const
 {
-    setSkinHint( aspect | QskAspect::Color, QColor( color ) );
-}
-
-void QskSkin::setColor( QskAspect::Aspect aspect, const QColor& color )
-{
-    setSkinHint( aspect | QskAspect::Color, color );
-}
-
-QColor QskSkin::color( QskAspect::Aspect aspect ) const
-{
-    return skinHint( aspect | QskAspect::Color ).value<QColor>();
-}
-
-QColor QskSkin::baseColor() const
-{
-    return color( QskAspect::Control | QskAspect::Color );
-}
-
-void QskSkin::setMetric( QskAspect::Aspect aspect, qreal metric )
-{
-    setSkinHint( aspect | QskAspect::Metric, metric );
-}
-
-qreal QskSkin::metric( QskAspect::Aspect aspect ) const
-{
-    return skinHint( aspect | QskAspect::Metric ).toReal();
-}
-
-void QskSkin::setAnimation(
-    QskAspect::Aspect aspect, QskAnimationHint animation )
-{
-    aspect.setAnimator( true );
-    setSkinHint( aspect, QVariant::fromValue( animation ) );
-}
-
-QskAnimationHint QskSkin::animation( QskAspect::Aspect aspect ) const
-{
-    aspect.setAnimator( true );
-    return skinHint( aspect ).value< QskAnimationHint >();
-}
-
-void QskSkin::setSkinHint( QskAspect::Aspect aspect, const QVariant& skinHint )
-{
-    // For edges/corners, add all the implied assignments
-    if ( aspect.isBoxPrimitive() )
-    {
-        if ( aspect.boxPrimitive() == QskAspect::Radius )
-        {
-            setSkinHint( aspect | QskAspect::RadiusX, skinHint );
-            setSkinHint( aspect | QskAspect::RadiusY, skinHint );
-            return;
-        }
-
-        const auto edges = aspect.edge();
-
-        const auto bitcount = qPopulationCount( static_cast<quint8>( edges ) );
-        if ( !bitcount || bitcount > 1 )
-        {
-            using namespace QskAspect;
-
-            auto aspectEdge = aspect;
-            aspectEdge.clearEdge();
-
-            if ( !bitcount || edges & TopEdge )
-                setSkinHint( aspectEdge | TopEdge, skinHint );
-
-            if ( !bitcount || ( edges & LeftEdge ) )
-                setSkinHint( aspectEdge | LeftEdge, skinHint );
-
-            if ( !bitcount || ( edges & RightEdge ) )
-                setSkinHint( aspectEdge | RightEdge, skinHint );
-
-            if ( !bitcount || ( edges & BottomEdge ) )
-                setSkinHint( aspectEdge | BottomEdge, skinHint );
-        }
-
-        if ( bitcount > 1 ) // Allows 0 to imply AllEdges
-            return;
-    }
-
-    {
-        bool isSame = true;
-        auto it = m_data->skinHints.find( aspect );
-        if ( it == m_data->skinHints.end() )
-        {
-            m_data->skinHints.emplace( aspect, skinHint );
-            isSame = false;
-        }
-        else if ( it->second != skinHint )
-        {
-            it->second = skinHint;
-            isSame = false;
-        }
-
-        if ( isSame )
-            return;
-    }
-
-    if ( aspect.isAnimator() )
-        m_data->animatorAspects[ aspect.subControl() ].insert( aspect );
-
-#if 0
-    // do we want to have such a signal - or maybe better an event ???
-    Q_EMIT skinHintChanged( aspect );
-#endif
-}
-
-void QskSkin::removeSkinHint( QskAspect::Aspect aspect )
-{
-    m_data->skinHints.erase( aspect );
-}
-
-const QVariant& QskSkin::skinHint( QskAspect::Aspect aspect ) const
-{
-    auto it = m_data->skinHints.find( aspect );
-    if ( it != m_data->skinHints.cend() )
-        return it->second;
-
-    static QVariant invalidHint;
-    return invalidHint;
+    return m_data->hintTable.hint( aspect );
 }
 
 void QskSkin::declareSkinlet( const QMetaObject* metaObject,
     const QMetaObject* skinletMetaObject )
 {
+    Q_ASSERT( skinletMetaObject->constructorCount() );
+
     const auto it = m_data->skinletMap.find( metaObject );
 
     if ( it != m_data->skinletMap.cend() )
@@ -297,11 +196,9 @@ void QskSkin::declareSkinlet( const QMetaObject* metaObject,
         if ( entry.metaObject != skinletMetaObject )
         {
             entry.metaObject = skinletMetaObject;
-            if ( entry.skinlet != nullptr )
-            {
-                delete entry.skinlet;
-                entry.skinlet = nullptr;
-            }
+
+            delete entry.skinlet;
+            entry.skinlet = nullptr;
         }
     }
     else
@@ -373,9 +270,14 @@ QskColorFilter QskSkin::graphicFilter( int graphicRole ) const
     return QskColorFilter();
 }
 
-const std::unordered_map< QskAspect::Aspect, QVariant >& QskSkin::skinHints() const
+const QskSkinHintTable& QskSkin::hintTable() const
 {
-    return m_data->skinHints;
+    return m_data->hintTable;
+}
+
+QskSkinHintTable& QskSkin::hintTable()
+{
+    return m_data->hintTable;
 }
 
 const std::unordered_map< int, QFont >& QskSkin::fonts() const
@@ -386,17 +288,6 @@ const std::unordered_map< int, QFont >& QskSkin::fonts() const
 const std::unordered_map< int, QskColorFilter >& QskSkin::graphicFilters() const
 {
     return m_data->graphicFilters;
-}
-
-const std::set< QskAspect::Aspect >& QskSkin::animatorAspects(
-    QskAspect::Subcontrol subControl ) const
-{
-    auto it = m_data->animatorAspects.find( subControl );
-    if ( it != m_data->animatorAspects.cend() )
-        return it->second;
-
-    static std::set< QskAspect::Aspect > dummyAspects;
-    return dummyAspects;
 }
 
 QskGraphic QskSkin::symbol( int symbolType ) const
@@ -422,24 +313,39 @@ bool QskSkin::hasGraphicProvider() const
     return m_data->graphicProviders.size() > 0;
 }
 
-const int *QskSkin::dialogButtonLayout( Qt::Orientation orientation ) const
+const int* QskSkin::dialogButtonLayout( Qt::Orientation orientation ) const
 {
-    //auto policy = QPlatformDialogHelper::UnknownLayout;
+    // auto policy = QPlatformDialogHelper::UnknownLayout;
     auto policy = QPlatformDialogHelper::WinLayout;
 
-    if ( const QPlatformTheme* theme = QGuiApplicationPrivate::platformTheme() )
+    if ( const auto theme = QGuiApplicationPrivate::platformTheme() )
     {
         const QVariant v = theme->themeHint( QPlatformTheme::DialogButtonBoxLayout );
-        policy = static_cast<QPlatformDialogHelper::ButtonLayout>( v.toInt() );
+        policy = static_cast< QPlatformDialogHelper::ButtonLayout >( v.toInt() );
     }
 
     return QPlatformDialogHelper::buttonLayout( orientation, policy );
 }
 
-QskSkinlet* QskSkin::skinlet( const QskSkinnable* skinnable )
+void QskSkin::setStateMask( QskAspect::State mask )
 {
-    for ( auto metaObject = skinnable->metaObject();
-        metaObject != nullptr; metaObject = metaObject->superClass() )
+    for ( auto state : { QskControl::Disabled, QskControl::Hovered, QskControl::Focused } )
+    {
+        if ( mask & state )
+            m_data->stateMask |= state;
+        else
+            m_data->stateMask &= ~state;
+    }
+}
+
+QskAspect::State QskSkin::stateMask() const
+{
+    return m_data->stateMask;
+}
+
+QskSkinlet* QskSkin::skinlet( const QMetaObject* metaObject )
+{
+    while ( metaObject )
     {
         auto it = m_data->skinletMap.find( metaObject );
         if ( it != m_data->skinletMap.cend() )
@@ -447,13 +353,12 @@ QskSkinlet* QskSkin::skinlet( const QskSkinnable* skinnable )
             auto& entry = it->second;
 
             if ( entry.skinlet == nullptr )
-            {
-                entry.skinlet = reinterpret_cast< QskSkinlet* >(
-                    entry.metaObject->newInstance( Q_ARG( QskSkin*, this ) ) );
-            }
+                entry.skinlet = qskNewSkinlet( entry.metaObject, this );
 
             return entry.skinlet;
         }
+
+        metaObject = metaObject->superClass();
     }
 
     static QskSkinlet defaultSkinlet;

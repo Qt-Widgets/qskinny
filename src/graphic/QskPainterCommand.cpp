@@ -5,20 +5,15 @@
 
 #include "QskPainterCommand.h"
 
-QskPainterCommand::QskPainterCommand():
-    m_type( Invalid )
-{
-}
-
-QskPainterCommand::QskPainterCommand( const QPainterPath& path ):
-    m_type( Path )
+QskPainterCommand::QskPainterCommand( const QPainterPath& path )
+    : m_type( Path )
 {
     m_path = new QPainterPath( path );
 }
 
 QskPainterCommand::QskPainterCommand( const QRectF& rect,
-    const QPixmap& pixmap, const QRectF& subRect ):
-    m_type( Pixmap )
+        const QPixmap& pixmap, const QRectF& subRect )
+    : m_type( Pixmap )
 {
     m_pixmapData = new PixmapData();
     m_pixmapData->rect = rect;
@@ -27,9 +22,8 @@ QskPainterCommand::QskPainterCommand( const QRectF& rect,
 }
 
 QskPainterCommand::QskPainterCommand( const QRectF& rect,
-    const QImage& image, const QRectF& subRect,
-    Qt::ImageConversionFlags flags ):
-    m_type( Image )
+        const QImage& image, const QRectF& subRect, Qt::ImageConversionFlags flags )
+    : m_type( Image )
 {
     m_imageData = new ImageData();
     m_imageData->rect = rect;
@@ -38,14 +32,14 @@ QskPainterCommand::QskPainterCommand( const QRectF& rect,
     m_imageData->flags = flags;
 }
 
-QskPainterCommand::QskPainterCommand( const QskPainterCommand::StateData& data ):
-    m_type( State )
+QskPainterCommand::QskPainterCommand( const QskPainterCommand::StateData& data )
+    : m_type( State )
 {
     m_stateData = new StateData( data );
 }
 
-QskPainterCommand::QskPainterCommand( const QPaintEngineState& state ):
-    m_type( State )
+QskPainterCommand::QskPainterCommand( const QPaintEngineState& state )
+    : m_type( State )
 {
     m_stateData = new StateData();
 
@@ -115,12 +109,12 @@ QskPainterCommand& QskPainterCommand::operator=( const QskPainterCommand& other 
     return *this;
 }
 
-bool QskPainterCommand::operator==( const QskPainterCommand& other ) const
+bool QskPainterCommand::operator==( const QskPainterCommand& other ) const noexcept
 {
     if ( m_type != other.m_type )
         return false;
 
-    switch( m_type )
+    switch ( m_type )
     {
         case Path:
         {
@@ -168,8 +162,8 @@ bool QskPainterCommand::operator==( const QskPainterCommand& other ) const
 
             if ( sd.flags & QPaintEngine::DirtyBackground )
             {
-                if ( sd.backgroundMode != osd.backgroundMode
-                    || sd.backgroundBrush != osd.backgroundBrush )
+                if ( sd.backgroundMode != osd.backgroundMode ||
+                    sd.backgroundBrush != osd.backgroundBrush )
                 {
                     return false;
                 }
@@ -189,8 +183,8 @@ bool QskPainterCommand::operator==( const QskPainterCommand& other ) const
 
             if ( sd.flags & QPaintEngine::DirtyClipRegion )
             {
-                if ( sd.clipRegion != osd.clipRegion
-                    || sd.clipOperation != osd.clipOperation )
+                if ( sd.clipRegion != osd.clipRegion ||
+                    sd.clipOperation != osd.clipOperation )
                 {
                     return false;
                 }
@@ -198,8 +192,8 @@ bool QskPainterCommand::operator==( const QskPainterCommand& other ) const
 
             if ( sd.flags & QPaintEngine::DirtyClipPath )
             {
-                if ( sd.clipPath != osd.clipPath
-                    || sd.clipOperation != osd.clipOperation )
+                if ( sd.clipPath != osd.clipPath ||
+                    sd.clipOperation != osd.clipOperation )
                 {
                     return false;
                 }
@@ -236,7 +230,7 @@ void QskPainterCommand::copy( const QskPainterCommand& other )
 {
     m_type = other.m_type;
 
-    switch( other.m_type )
+    switch ( other.m_type )
     {
         case Path:
         {
@@ -265,7 +259,7 @@ void QskPainterCommand::copy( const QskPainterCommand& other )
 
 void QskPainterCommand::reset()
 {
-    switch( m_type )
+    switch ( m_type )
     {
         case Path:
         {
@@ -294,22 +288,22 @@ void QskPainterCommand::reset()
     m_type = Invalid;
 }
 
-QPainterPath* QskPainterCommand::path()
+QPainterPath* QskPainterCommand::path() noexcept
 {
     return m_path;
 }
 
-QskPainterCommand::PixmapData* QskPainterCommand::pixmapData()
+QskPainterCommand::PixmapData* QskPainterCommand::pixmapData() noexcept
 {
     return m_pixmapData;
 }
 
-QskPainterCommand::ImageData* QskPainterCommand::imageData()
+QskPainterCommand::ImageData* QskPainterCommand::imageData() noexcept
 {
     return m_imageData;
 }
 
-QskPainterCommand::StateData* QskPainterCommand::stateData()
+QskPainterCommand::StateData* QskPainterCommand::stateData() noexcept
 {
     return m_stateData;
 }

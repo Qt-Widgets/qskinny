@@ -6,8 +6,8 @@
 #ifndef QSK_TAB_BAR_H
 #define QSK_TAB_BAR_H
 
-#include "QskGlobal.h"
 #include "QskBox.h"
+#include "QskNamespace.h"
 
 class QskTabButton;
 class QskTextOptions;
@@ -16,8 +16,16 @@ class QSK_EXPORT QskTabBar : public QskBox
 {
     Q_OBJECT
 
-    Q_PROPERTY( Qt::Orientation orientation READ orientation
-        WRITE setOrientation NOTIFY orientationChanged FINAL )
+    Q_PROPERTY( Qsk::Position tabPosition READ tabPosition
+        WRITE setTabPosition NOTIFY tabPositionChanged FINAL )
+
+    Q_PROPERTY( Qt::Orientation orientation READ orientation )
+
+    Q_PROPERTY( bool autoScrollFocusButton READ autoScrollFocusButton
+        WRITE setAutoScrollFocusedButton NOTIFY autoScrollFocusedButtonChanged FINAL )
+
+    Q_PROPERTY( bool autoFitTabs READ autoFitTabs
+        WRITE setAutoFitTabs NOTIFY autoFitTabsChanged FINAL )
 
     Q_PROPERTY( int count READ count NOTIFY countChanged FINAL )
 
@@ -29,15 +37,26 @@ class QSK_EXPORT QskTabBar : public QskBox
 
     using Inherited = QskBox;
 
-public:
+  public:
     QSK_SUBCONTROLS( Panel )
 
     QskTabBar( QQuickItem* parent = nullptr );
-    QskTabBar( Qt::Orientation, QQuickItem* parent = nullptr );
-    virtual ~QskTabBar();
+    QskTabBar( Qsk::Position, QQuickItem* parent = nullptr );
 
-    void setOrientation( Qt::Orientation );
+    ~QskTabBar() override;
+
+    void setTabPosition( Qsk::Position );
+    Qsk::Position tabPosition() const;
+
     Qt::Orientation orientation() const;
+
+    void setAutoScrollFocusedButton( bool );
+    bool autoScrollFocusButton() const;
+
+    void setAutoFitTabs( bool );
+    bool autoFitTabs() const;
+
+    void ensureButtonVisible( const QskTabButton* );
 
     void setTextOptions( const QskTextOptions& );
     QskTextOptions textOptions() const;
@@ -49,7 +68,7 @@ public:
     Q_INVOKABLE int insertTab( int index, QskTabButton* );
 
     Q_INVOKABLE void removeTab( int index );
-    Q_INVOKABLE void clear();
+    Q_INVOKABLE void clear( bool autoDelete = false );
 
     bool isTabEnabled( int index ) const;
     void setTabEnabled( int index, bool );
@@ -69,23 +88,29 @@ public:
     int indexOf( const QskTabButton* ) const;
     Q_INVOKABLE int indexOf( QskTabButton* ) const;
 
-    virtual QskAspect::Subcontrol effectiveSubcontrol(
+    QskAspect::Placement effectivePlacement() const override;
+
+    QskAspect::Subcontrol effectiveSubcontrol(
         QskAspect::Subcontrol ) const override;
 
-public Q_SLOTS:
+  public Q_SLOTS:
     void setCurrentIndex( int index );
 
-Q_SIGNALS:
+  Q_SIGNALS:
     void currentIndexChanged( int index );
-    void countChanged();
-    void textOptionsChanged();
-    void orientationChanged();
+    void buttonClicked( int index );
+    void countChanged( int );
+    void textOptionsChanged( const QskTextOptions& );
+    void tabPositionChanged( Qsk::Position );
+    void autoScrollFocusedButtonChanged( bool );
+    void autoFitTabsChanged( bool );
 
-protected:
-    virtual void componentComplete() override;
+  protected:
+    void componentComplete() override;
 
-private:
-    void restack();
+  private:
+    void adjustCurrentIndex();
+    void handleButtonClick();
 
     class PrivateData;
     std::unique_ptr< PrivateData > m_data;
@@ -96,4 +121,5 @@ inline int QskTabBar::indexOf( const QskTabButton* tabButton ) const
 {
     return QskTabBar::indexOf( const_cast< QskTabButton* >( tabButton ) );
 }
+
 #endif

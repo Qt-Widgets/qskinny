@@ -5,68 +5,34 @@
 
 #include "QskSubWindowAreaSkinlet.h"
 #include "QskSubWindowArea.h"
-#include "QskSkin.h"
-#include "QskGradient.h"
-#include "QskRectNode.h"
 
-QskSubWindowAreaSkinlet::QskSubWindowAreaSkinlet( QskSkin* skin ):
-    Inherited( skin )
+QskSubWindowAreaSkinlet::QskSubWindowAreaSkinlet( QskSkin* skin )
+    : Inherited( skin )
 {
     setNodeRoles( { PanelRole } );
 }
 
 QskSubWindowAreaSkinlet::~QskSubWindowAreaSkinlet() = default;
 
-QRectF QskSubWindowAreaSkinlet::subControlRect(
-    const QskSkinnable* skinnable, QskAspect::Subcontrol subControl ) const
-{       
-    const auto area = static_cast< const QskSubWindowArea* >( skinnable );
-    
-    if ( subControl == QskSubWindowArea::Panel )
-    {
-        return panelRect( area );
-    }
-    
-    return Inherited::subControlRect( skinnable, subControl );
-}
-
-QRectF QskSubWindowAreaSkinlet::panelRect( const QskSubWindowArea* area ) const
+QRectF QskSubWindowAreaSkinlet::subControlRect( const QskSkinnable* skinnable,
+    const QRectF& contentsRect, QskAspect::Subcontrol subControl ) const
 {
-    return area->contentsRect();
+    if ( subControl == QskSubWindowArea::Panel )
+        return contentsRect;
+
+    return Inherited::subControlRect( skinnable, contentsRect, subControl );
 }
 
 QSGNode* QskSubWindowAreaSkinlet::updateSubNode(
     const QskSkinnable* skinnable, quint8 nodeRole, QSGNode* node ) const
 {
-    const auto area = static_cast< const QskSubWindowArea* >( skinnable );
-
-    switch( nodeRole )
+    switch ( nodeRole )
     {
         case PanelRole:
-            return updatePanelNode( area, node );
-
-        default:
-            return nullptr;
+            return updateBoxNode( skinnable, node, QskSubWindowArea::Panel );
     }
-}
 
-QSGNode* QskSubWindowAreaSkinlet::updatePanelNode(
-    const QskSubWindowArea* area, QSGNode* node ) const
-{
-    const QRectF rect = subControlRect( area, QskSubWindowArea::Panel );
-
-    if ( !area->gradient().isValid() || rect.isEmpty() )
-        return nullptr;
-
-    QskRectNode* rectNode = static_cast< QskRectNode* >( node );
-    if ( rectNode == nullptr )
-        rectNode = new QskRectNode();
-
-    rectNode->setRect( rect );
-    rectNode->setFillGradient( area->gradient() );
-    rectNode->update();
-
-    return rectNode;
+    return Inherited::updateSubNode( skinnable, nodeRole, node );
 }
 
 #include "moc_QskSubWindowAreaSkinlet.cpp"

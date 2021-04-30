@@ -6,10 +6,7 @@
 #ifndef QSK_TEXT_LABEL_SKINLET_H
 #define QSK_TEXT_LABEL_SKINLET_H
 
-#include "QskGlobal.h"
 #include "QskSkinlet.h"
-
-class QskTextLabel;
 
 class QSK_EXPORT QskTextLabelSkinlet : public QskSkinlet
 {
@@ -17,25 +14,24 @@ class QSK_EXPORT QskTextLabelSkinlet : public QskSkinlet
 
     using Inherited = QskSkinlet;
 
-public:
+  public:
     enum NodeRole
     {
-        TextRole
+        PanelRole, TextRole
     };
 
     Q_INVOKABLE QskTextLabelSkinlet( QskSkin* = nullptr );
-    virtual ~QskTextLabelSkinlet();
+    ~QskTextLabelSkinlet() override;
 
-    virtual QRectF subControlRect( const QskSkinnable*,
-        QskAspect::Subcontrol ) const override;
+    QRectF subControlRect( const QskSkinnable*,
+        const QRectF&, QskAspect::Subcontrol ) const override;
 
-protected:
-    virtual QSGNode* updateSubNode( const QskSkinnable*,
+    QSizeF sizeHint( const QskSkinnable*,
+        Qt::SizeHint, const QSizeF& ) const override;
+
+  protected:
+    QSGNode* updateSubNode( const QskSkinnable*,
         quint8 nodeRole, QSGNode* ) const override;
-
-private:
-    QRectF textRect( const QskTextLabel* ) const;
-    QSGNode* updateTextNode( const QskTextLabel*, QSGNode* ) const;
 };
 
 #endif

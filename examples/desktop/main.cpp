@@ -3,35 +3,44 @@
  * This file may be used under the terms of the 3-clause BSD License
  *****************************************************************************/
 
-#include <SkinnyShortcut.h>
 #include <SkinnyShapeProvider.h>
+#include <SkinnyShortcut.h>
 
+#include <QskAspect.h>
+#include <QskGradient.h>
+#include <QskGraphicLabel.h>
 #include <QskObjectCounter.h>
-#include <QskWindow.h>
+#include <QskShortcutMap.h>
 #include <QskSubWindow.h>
 #include <QskSubWindowArea.h>
-#include <QskGraphicLabel.h>
-#include <QskGradient.h>
-#include <QskAspect.h>
+#include <QskWindow.h>
 
+#include <QDebug>
 #include <QGuiApplication>
+#include <QKeySequence>
 
 class SubWindow : public QskSubWindow
 {
-public:
-    SubWindow( const QString& graphicSource, QQuickItem* parent = nullptr ):
-        QskSubWindow( parent )
+  public:
+    SubWindow( const QString& iconSource, QQuickItem* parent = nullptr )
+        : QskSubWindow( parent )
     {
-        setObjectName( graphicSource );
+        setObjectName( iconSource );
 
-        setColor( QskSubWindow::Panel | QskAspect::Background, "Wheat" );
+        const QUrl url( iconSource );
+
+        setWindowTitle( url.fileName() );
+        setWindowIconSource( url );
 
         auto label = new QskGraphicLabel( this );
-        label->setSource( graphicSource );
+        label->setSource( iconSource );
         label->setAlignment( Qt::AlignCenter );
 
         setSizePolicy( QskSizePolicy::MinimumExpanding,
             QskSizePolicy::MinimumExpanding );
+
+        QskShortcutMap::addShortcut( this, QKeySequence( Qt::Key_P ), true,
+            [ iconSource ] { qDebug() << iconSource; } );
     }
 };
 
@@ -49,8 +58,8 @@ int main( int argc, char* argv[] )
     SkinnyShortcut::enable( SkinnyShortcut::AllShortcuts );
 
     QskSubWindowArea* area = new QskSubWindowArea();
-    area->setGradient( QskGradient( QskGradient::Diagonal,
-        "DarkSlateGray", "LightSlateGray" ) );
+    area->setGradientHint( QskSubWindowArea::Panel,
+        QskGradient( QskGradient::Diagonal, "DarkSlateGray", "LightSlateGray" ) );
 
     QRectF windowRect( 0, 0, 250, 250 );
 
@@ -62,8 +71,9 @@ int main( int argc, char* argv[] )
     {
         const qreal off = ( i + 1 ) * 100;
 
-        SubWindow* subWindow = new SubWindow( url + shapes[i], area );
+        auto subWindow = new SubWindow( url + shapes[ i ], area );
         subWindow->setGeometry( windowRect.translated( off, off ) );
+        subWindow->open();
     }
 
     QskWindow window;

@@ -4,12 +4,18 @@
  *****************************************************************************/
 
 #include "QskBox.h"
-#include "QskSkinlet.h"
+#include "QskMargins.h"
 
 QSK_SUBCONTROL( QskBox, Panel )
 
-QskBox::QskBox( QQuickItem* parent ):
-    Inherited( parent )
+QskBox::QskBox( QQuickItem* parent )
+    : QskBox( true, parent )
+{
+}
+
+QskBox::QskBox( bool hasPanel, QQuickItem* parent )
+    : Inherited( parent )
+    , m_hasPanel( hasPanel )
 {
 }
 
@@ -17,31 +23,53 @@ QskBox::~QskBox()
 {
 }
 
-QRectF QskBox::layoutRect() const
-{   
-    return innerBox( Panel, effectiveSkinlet()->subControlRect( this, Panel ) );
+void QskBox::setPanel( bool on )
+{
+    if ( on != m_hasPanel )
+    {
+        m_hasPanel = on;
+
+        resetImplicitSize();
+        polish();
+        update();
+    }
 }
 
-QSizeF QskBox::contentsSizeHint() const
+bool QskBox::hasPanel() const
 {
-    QSizeF size( -1, -1 );
+    return m_hasPanel;
+}
 
-    if ( autoLayoutChildren() )
-    {
-        const QSizeF hint = Inherited::contentsSizeHint();
-        
-        if ( hint.width() > 0 )
-            size.setWidth( hint.width() );
-            
-        if ( hint.height() > 0 )
-            size.setHeight( hint.height() );
-    }       
+void QskBox::setPadding( qreal padding )
+{
+    setPadding( QskMargins( padding ) );
+}
 
-    const QSizeF minSize(
-        metric( Panel | QskAspect::MinimumWidth ),
-        metric( Panel | QskAspect::MinimumHeight ) );
+void QskBox::setPadding( const QMarginsF& padding )
+{
+    const auto pd = QskMargins().expandedTo( padding );
 
-    return outerBoxSize( Panel, size ).expandedTo( minSize );
-}   
+    if ( setPaddingHint( Panel, pd ) )
+        Q_EMIT paddingChanged( pd );
+}
+
+void QskBox::resetPadding()
+{
+    if ( resetPaddingHint( Panel ) )
+        Q_EMIT paddingChanged( paddingHint( Panel ) );
+}
+
+QMarginsF QskBox::padding() const
+{
+    return paddingHint( Panel );
+}
+
+QRectF QskBox::layoutRectForSize( const QSizeF& size ) const
+{
+    if ( m_hasPanel )
+        return subControlContentsRect( size, Panel );
+
+    return Inherited::layoutRectForSize( size );
+}
 
 #include "moc_QskBox.cpp"

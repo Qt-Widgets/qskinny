@@ -7,17 +7,18 @@
 #define QSK_GRAPHIC_PROVIDER_H
 
 #include "QskGlobal.h"
-#include <QObject>
+
+#include <qobject.h>
 #include <memory>
 
 class QskGraphic;
 class QUrl;
 
-class QSK_EXPORT QskGraphicProvider: public QObject
+class QSK_EXPORT QskGraphicProvider : public QObject
 {
-public:
+  public:
     QskGraphicProvider( QObject* parent = nullptr );
-    virtual ~QskGraphicProvider();
+    ~QskGraphicProvider() override;
 
     void setCacheSize( int );
     int cacheSize() const;
@@ -26,7 +27,7 @@ public:
 
     const QskGraphic* requestGraphic( const QString& id ) const;
 
-protected:
+  protected:
     virtual const QskGraphic* loadGraphic( const QString& id ) const = 0;
 
     class PrivateData;

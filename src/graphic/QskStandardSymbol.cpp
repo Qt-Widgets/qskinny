@@ -5,7 +5,9 @@
 
 #include "QskStandardSymbol.h"
 #include "QskGraphic.h"
-#include <QPainter>
+
+#include <qpainter.h>
+#include <qpainterpath.h>
 
 static void qskOkGraphic( QPainter* painter )
 {
@@ -32,7 +34,6 @@ static void qskOkGraphic( QPainter* painter )
 
     painter->setPen( Qt::NoPen );
 
-    painter->setBrush( QColor( "#4caf50" ) );
     painter->setBrush( QColor( 76, 175, 80 ) );
     painter->drawPath( path );
 }
@@ -67,7 +68,7 @@ static void qskCriticalGraphic( QPainter* painter )
     path.addRect( 5, 22, 30, 5 );
 
     painter->setPen( Qt::NoPen );
-    //painter->setBrush( QColor( Qt::black ) );
+    // painter->setBrush( QColor( Qt::black ) );
     painter->setBrush( QColor( Qt::red ) );
     painter->drawPath( path );
 }
@@ -160,8 +161,8 @@ static void qskInformationGraphic( QPainter* painter )
     const double w = 40;
     const double h = 50;
 
-    const QRect dotRect( 0.3 * w, 0.15 * h, 0.4 * w, 0.2 * h );
-    const QRect barRect( 0.3 * w, 0.4 * h, 0.4 * w, 0.5 * h );
+    const QRectF dotRect( 0.3 * w, 0.15 * h, 0.4 * w, 0.2 * h );
+    const QRectF barRect( 0.3 * w, 0.4 * h, 0.4 * w, 0.5 * h );
 
     QPainterPath path;
 
@@ -193,12 +194,12 @@ QskGraphic QskStandardSymbol::graphic( Type symbolType )
     if ( symbolType < 0 || symbolType >= SymbolTypeCount )
         return QskGraphic();
 
-    if ( graphics[symbolType].isNull() )
+    if ( graphics[ symbolType ].isNull() )
     {
-        QPainter painter( &graphics[symbolType] );
+        QPainter painter( &graphics[ symbolType ] );
         painter.setRenderHint( QPainter::Antialiasing, true );
 
-        switch( symbolType )
+        switch ( symbolType )
         {
             case QskStandardSymbol::Ok:
             {
@@ -234,7 +235,7 @@ QskGraphic QskStandardSymbol::graphic( Type symbolType )
         }
     }
 
-    return graphics[symbolType];
+    return graphics[ symbolType ];
 }
 
 #include "moc_QskStandardSymbol.cpp"

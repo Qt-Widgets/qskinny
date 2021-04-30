@@ -4,23 +4,36 @@
  *****************************************************************************/
 
 #include "QskDirtyItemFilter.h"
-#include "QskWindow.h"
-#include "QskControl.h"
-
-#include <QQuickWindow>
+#include "QskQuickItem.h"
 
 QSK_QT_PRIVATE_BEGIN
-#include <private/qquickwindow_p.h>
 #include <private/qquickitem_p.h>
+#include <private/qquickwindow_p.h>
 QSK_QT_PRIVATE_END
 
 static inline bool qskIsUpdateBlocked( const QQuickItem* item )
 {
     if ( !item->isVisible() )
     {
-        if ( const auto control = qobject_cast< const QskControl* >( item ) )
-            return control->testControlFlag( QskControl::DeferredUpdate );
+        if ( auto qskItem = qobject_cast< const QskQuickItem* >( item ) )
+            return qskItem->testUpdateFlag( QskQuickItem::DeferredUpdate );
     }
+
+#if 0
+    /*
+        Blocking items, that are outside the window would be easy,
+        but we have not yet found a performant way to send update notifications
+        when an item enters/leaves the window. TODO ...
+     */
+    else if ( const auto control = qskControlCast( item ) )
+    {
+        const QRectF itemRect( item->mapToScene( QPointF() ), item->size() );
+        const QRectF sceneRect( 0, 0, item->window()->width(), item->window()->height() );
+
+        return !itemRect.intersects( sceneRect );
+    }
+#endif
+
     return false;
 }
 
@@ -29,12 +42,33 @@ static inline void qskBlockDirty( QQuickItem* item, bool on )
     if ( qskIsUpdateBlocked( item ) )
         QQuickItemPrivate::get( item )->componentComplete = !on;
 
-    for ( auto child : item->childItems() )
+    const auto children = item->childItems();
+    for ( auto child : children )
         qskBlockDirty( child, on );
 }
 
-QskDirtyItemFilter::QskDirtyItemFilter( QObject* parent ):
-    QObject( parent )
+namespace
+{
+    class ResetBlockedDirtyJob final : public QRunnable
+    {
+      public:
+        inline ResetBlockedDirtyJob( QQuickWindow* window )
+            : m_window( window )
+        {
+        }
+
+        void run() override
+        {
+            qskBlockDirty( m_window->contentItem(), false );
+        }
+
+      private:
+        const QQuickWindow* m_window;
+    };
+}
+
+QskDirtyItemFilter::QskDirtyItemFilter( QObject* parent )
+    : QObject( parent )
 {
 }
 
@@ -60,10 +94,11 @@ void QskDirtyItemFilter::addWindow( QQuickWindow* window )
      */
 
     connect( window, &QQuickWindow::beforeSynchronizing,
-        window, [ = ] { beforeSynchronizing( window ); },
+        window, [ this, window ] { beforeSynchronizing( window ); },
         Qt::DirectConnection );
 
-    connect( window, &QObject::destroyed, this, &QskDirtyItemFilter::cleanUp );
+    connect( window, &QObject::destroyed,
+        this, [ this, window ] { m_windows.remove( window ); } );
 }
 
 void QskDirtyItemFilter::beforeSynchronizing( QQuickWindow* window )
@@ -79,35 +114,20 @@ void QskDirtyItemFilter::beforeSynchronizing( QQuickWindow* window )
             to avoid having all items in the dirtyList.
          */
         qskBlockDirty( window->contentItem(), true );
-        connect( window, &QQuickWindow::afterSynchronizing,
-            this, &QskDirtyItemFilter::resetBlockedDirty );
+
+        window->scheduleRenderJob( new ResetBlockedDirtyJob( window ),
+            QQuickWindow::AfterSynchronizingStage );
     }
 }
 
-void QskDirtyItemFilter::resetBlockedDirty()
-{
-    auto window = qobject_cast< QQuickWindow* >( sender() );
-    Q_ASSERT( window );
-
-    qskBlockDirty( window->contentItem(), false );
-    disconnect( window, &QQuickWindow::afterSynchronizing,
-        this, &QskDirtyItemFilter::resetBlockedDirty );
-}
-
-void QskDirtyItemFilter::cleanUp( QObject* window )
-{
-    disconnect( window );
-    m_windows.remove( window );
-}
-
-void QskDirtyItemFilter::filterDirtyList( QQuickWindow* window,
-    bool ( *isBlocked )( const QQuickItem* ) )
+void QskDirtyItemFilter::filterDirtyList(
+    QQuickWindow* window, bool ( *isBlocked )( const QQuickItem* ) )
 {
     if ( window == nullptr )
         return;
 
     auto d = QQuickWindowPrivate::get( window );
-    for ( QQuickItem* item = d->dirtyItemList; item != nullptr; )
+    for ( auto item = d->dirtyItemList; item != nullptr; )
     {
         auto nextItem = QQuickItemPrivate::get( item )->nextDirtyItem;
 
@@ -117,4 +137,3 @@ void QskDirtyItemFilter::filterDirtyList( QQuickWindow* window,
         item = nextItem;
     }
 }
-

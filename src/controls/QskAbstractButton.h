@@ -6,34 +6,40 @@
 #ifndef QSK_ABSTRACT_BUTTON_H
 #define QSK_ABSTRACT_BUTTON_H
 
-#include "QskGlobal.h"
 #include "QskControl.h"
 
 class QSK_EXPORT QskAbstractButton : public QskControl
 {
     Q_OBJECT
 
-    Q_PROPERTY( bool checkable READ isCheckable WRITE setCheckable NOTIFY checkableChanged FINAL )
+    Q_PROPERTY( bool checkable READ isCheckable
+        WRITE setCheckable NOTIFY checkableChanged FINAL )
 
-    Q_PROPERTY( bool autoRepeat READ autoRepeat WRITE setAutoRepeat NOTIFY autoRepeatChanged FINAL )
+    Q_PROPERTY( bool autoRepeat READ autoRepeat
+        WRITE setAutoRepeat NOTIFY autoRepeatChanged FINAL )
+
     Q_PROPERTY( int autoRepeatDelay READ autoRepeatDelay
         WRITE setAutoRepeatDelay NOTIFY autoRepeatDelayChanged FINAL )
+
     Q_PROPERTY( int autoRepeatInterval READ autoRepeatInterval
         WRITE setAutoRepeatInterval NOTIFY autoRepeatIntervalChanged FINAL )
 
     Q_PROPERTY( bool exclusive READ exclusive
         WRITE setExclusive NOTIFY exclusiveChanged FINAL )
 
-    Q_PROPERTY( bool pressed READ isPressed WRITE setPressed NOTIFY pressedChanged FINAL )
-    Q_PROPERTY( bool checked READ isChecked WRITE setChecked NOTIFY checkedChanged FINAL )
+    Q_PROPERTY( bool pressed READ isPressed
+        WRITE setPressed NOTIFY pressedChanged FINAL )
+
+    Q_PROPERTY( bool checked READ isChecked
+        WRITE setChecked NOTIFY checkedChanged FINAL )
 
     using Inherited = QskControl;
 
-public:
+  public:
     QSK_STATES( Flat, Checked, Pressed, Checkable )
 
     QskAbstractButton( QQuickItem* parent = nullptr );
-    virtual ~QskAbstractButton();
+    ~QskAbstractButton() override;
 
     void setCheckable( bool );
     bool isCheckable() const;
@@ -55,45 +61,47 @@ public:
     void setExclusive( bool );
     bool exclusive() const;
 
-public Q_SLOTS:
+  public Q_SLOTS:
     void toggle();
     void click();
     void setChecked( bool );
 
-Q_SIGNALS:
+  Q_SIGNALS:
     void pressed();
     void released();
     void canceled();
     void clicked();
     void toggled( bool );
 
-    void pressedChanged();
-    void checkedChanged();
-    void checkableChanged();
+    void pressedChanged( bool );
+    void checkedChanged( bool );
+    void checkableChanged( bool );
 
-    void autoRepeatChanged();
+    void autoRepeatChanged( bool );
     void autoRepeatDelayChanged();
     void autoRepeatIntervalChanged();
 
-    void exclusiveChanged();
+    void exclusiveChanged( bool );
 
-protected:
-    virtual bool event( QEvent* ) override;
+  protected:
+    bool event( QEvent* ) override;
 
-    virtual void keyPressEvent( QKeyEvent* ) override;
-    virtual void keyReleaseEvent( QKeyEvent* ) override;
+    void keyPressEvent( QKeyEvent* ) override;
+    void keyReleaseEvent( QKeyEvent* ) override;
 
-    virtual void mouseMoveEvent( QMouseEvent* ) override;
-    virtual void mousePressEvent( QMouseEvent* ) override;
-    virtual void mouseReleaseEvent( QMouseEvent* ) override;
-    virtual void mouseUngrabEvent() override;
+    void mouseMoveEvent( QMouseEvent* ) override;
+    void mousePressEvent( QMouseEvent* ) override;
+    void mouseReleaseEvent( QMouseEvent* ) override;
+    void mouseUngrabEvent() override;
 
-    virtual void focusInEvent( QFocusEvent* ) override;
-    virtual void focusOutEvent( QFocusEvent* ) override;
+    void focusInEvent( QFocusEvent* ) override;
+    void focusOutEvent( QFocusEvent* ) override;
 
-    virtual void timerEvent( QTimerEvent* ) override;
+    void timerEvent( QTimerEvent* ) override;
 
-private:
+    virtual void setCheckedState( bool on );
+
+  private:
     void releaseButton();
 
     class PrivateData;

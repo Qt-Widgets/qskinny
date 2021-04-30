@@ -20,9 +20,9 @@ class QSK_EXPORT QskScrollArea : public QskScrollView
 
     using Inherited = QskScrollView;
 
-public:
+  public:
     QskScrollArea( QQuickItem* parent = nullptr );
-    virtual ~QskScrollArea();
+    ~QskScrollArea() override;
 
     void setScrolledItem( QQuickItem* );
     QQuickItem* scrolledItem() const;
@@ -30,14 +30,14 @@ public:
     void setItemResizable( bool on );
     bool isItemResizable() const;
 
-Q_SIGNALS:
-    void itemResizableChanged();
+  Q_SIGNALS:
     void scrolledItemChanged();
+    void itemResizableChanged( bool );
 
-protected:
-    virtual void updateLayout() override;
+  protected:
+    void updateLayout() override;
 
-private:
+  private:
     void translateItem();
     void adjustItem();
 

@@ -1,40 +1,28 @@
 /******************************************************************************
  * QSkinny - Copyright (C) 2016 Uwe Rathmann
- * This file may be used under the terms of the QSkinny License, Version 1.0
+ * This file may be used under the terms of the 3-clause BSD License
  *****************************************************************************/
 
 #include "Frame.h"
 
-#include <QskAspect.h>
-#include <QskFrameNode.h>
-#include <QskSkinlet.h>
+#include <QskBoxBorderColors.h>
+#include <QskBoxBorderMetrics.h>
+#include <QskBoxNode.h>
+#include <QskBoxShapeMetrics.h>
+#include <QskGradient.h>
+#include <QskSGNode.h>
 
 static inline qreal effectiveRadius( const QRectF& rect, qreal percentage )
 {
     return percentage / 100.0 * 0.5 * qMin( rect.width(), rect.height() );
 }
 
-static inline qreal shadeFactor( Frame::Style style )
-{
-    switch( style )
-    {
-        case Frame::Raised:
-            return 1.0;
-
-        case Frame::Sunken:
-            return -1.0;
-
-        default:
-            return 0.0;
-    }
-}
-
-Frame::Frame( QQuickItem* parent ):
-    Inherited( parent ),
-    m_style( Frame::Plain ),
-    m_color( Qt::gray ),
-    m_frameWidth( 1.0 ),
-    m_radius( 0.0 )
+Frame::Frame( QQuickItem* parent )
+    : Inherited( parent )
+    , m_style( Frame::Plain )
+    , m_color( Qt::gray )
+    , m_frameWidth( 1.0 )
+    , m_radius( 0.0 )
 {
 }
 
@@ -111,46 +99,59 @@ void Frame::updateNode( QSGNode* parentNode )
 
     const quint8 nodeRole = 0;
 
-    auto node = static_cast< QskFrameNode* >(
-        QskSkinlet::findNodeByRole( parentNode, nodeRole ) );
+    auto node = static_cast< QskBoxNode* >(
+        QskSGNode::findChildNode( parentNode, nodeRole ) );
 
     const QRectF rect = contentsRect();
     if ( rect.isEmpty() )
     {
         delete node;
+        return;
     }
-    else
+
+    if ( node == nullptr )
     {
-        if ( node == nullptr )
-        {
-            node = new QskFrameNode;
-            QskSkinlet::setNodeRole( node, nodeRole );
-
-            parentNode->appendChildNode( node );
-        }
-
-        updateFrameNode( rect, node );
+        node = new QskBoxNode;
+        QskSGNode::setNodeRole( node, nodeRole );
     }
+
+    updateFrameNode( rect, node );
+
+    if ( node->parent() != parentNode )
+        parentNode->appendChildNode( node );
 }
 
-void Frame::updateFrameNode( const QRectF& rect, QskFrameNode* node )
+void Frame::updateFrameNode( const QRectF& rect, QskBoxNode* node )
 {
-    node->setRect( rect );
-    node->setRadius( effectiveRadius( rect, m_radius ) );
-    node->setBorderWidth( m_frameWidth );
-
     const QColor dark = m_color.darker( 150 );
     const QColor light = m_color.lighter( 150 );
 
-    const qreal sf = shadeFactor( m_style );
-    if ( sf == 0.0 )
-        node->setColors( dark, m_color, dark );
-    else
-        node->setColors( dark, m_color, light );
-    
-    node->setShadeFactor( sf );
+    QColor c1, c2;
 
-    node->update();
+    switch ( m_style )
+    {
+        case Frame::Sunken:
+        {
+            c1 = dark;
+            c2 = light;
+            break;
+        }
+        case Frame::Raised:
+        {
+            c1 = light;
+            c2 = dark;
+            break;
+        }
+        default:
+        {
+            c1 = c2 = dark;
+        }
+    }
+
+    const QskBoxBorderColors borderColors( c1, c1, c2, c2 );
+    const qreal radius = effectiveRadius( rect, m_radius );
+
+    node->setBoxData( rect, radius, m_frameWidth, borderColors, m_color );
 }
 
 #include "moc_Frame.cpp"

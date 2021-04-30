@@ -6,7 +6,6 @@
 #ifndef QSK_PAGE_INDICATOR_SKINLET_H
 #define QSK_PAGE_INDICATOR_SKINLET_H
 
-#include "QskGlobal.h"
 #include "QskSkinlet.h"
 
 class QskPageIndicator;
@@ -17,7 +16,7 @@ class QSK_EXPORT QskPageIndicatorSkinlet : public QskSkinlet
 
     using Inherited = QskSkinlet;
 
-public:
+  public:
     enum NodeRole
     {
         PanelRole,
@@ -25,19 +24,20 @@ public:
     };
 
     Q_INVOKABLE QskPageIndicatorSkinlet( QskSkin* = nullptr );
-    virtual ~QskPageIndicatorSkinlet();
+    ~QskPageIndicatorSkinlet() override;
 
-    virtual QRectF subControlRect(
-        const QskSkinnable*, QskAspect::Subcontrol ) const override;
+    QRectF subControlRect( const QskSkinnable*,
+        const QRectF&, QskAspect::Subcontrol ) const override;
 
-protected:
-    virtual QSGNode* updateSubNode( const QskSkinnable*,
+    QSizeF sizeHint( const QskSkinnable*,
+        Qt::SizeHint, const QSizeF& ) const override;
+
+  protected:
+    QSGNode* updateSubNode( const QskSkinnable*,
         quint8 nodeRole, QSGNode* ) const override;
 
-private:
-    QSGNode* updatePanelNode( const QskPageIndicator*, QSGNode* ) const;
+  private:
     QSGNode* updateBulletsNode( const QskPageIndicator*, QSGNode* ) const;
-
     QRectF bulletRect( const QskPageIndicator*, const QRectF&, int index ) const;
 };
 

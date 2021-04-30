@@ -3,8 +3,8 @@
  * This file may be used under the terms of the 3-clause BSD License
  *****************************************************************************/
 
-#ifndef _MAIN_WINDOW_H_
-#define _MAIN_WINDOW_H_
+#ifndef MAIN_WINDOW_H_
+#define MAIN_WINDOW_H_
 
 #include <QskWindow.h>
 
@@ -15,14 +15,14 @@ class MainWindow : public QskWindow
 {
     Q_OBJECT
 
-public:
+  public:
     MainWindow();
 
-private Q_SLOTS:
+  private Q_SLOTS:
     void setDarknessMode( bool on );
     void setGraphicRoles( QskSkin* );
 
-private:
+  private:
     QskTabView* m_tabView;
 };
 

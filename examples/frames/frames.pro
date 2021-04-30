@@ -1,6 +1,4 @@
-include( $${PWD}/../examples.pri )
-
-TARGET = frames
+CONFIG += qskexample qskqmlexport
 
 RESOURCES += \
     frames.qrc

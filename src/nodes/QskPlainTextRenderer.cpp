@@ -4,126 +4,106 @@
  *****************************************************************************/
 
 #include "QskPlainTextRenderer.h"
-#include "QskSkinlet.h"
+#include "QskTextColors.h"
+#include "QskTextOptions.h"
 
-#include <QFontMetrics>
-#include <QGuiApplication>
-#include <QSGTransformNode>
-#include <QQuickWindow>
+#include <qfontmetrics.h>
+#include <qmath.h>
+#include <qsgnode.h>
 
 QSK_QT_PRIVATE_BEGIN
 #include <private/qsgadaptationlayer_p.h>
-
-#if QT_VERSION < QT_VERSION_CHECK( 5, 8, 0 )
 #include <private/qsgcontext_p.h>
-typedef QSGRenderContext RenderContext;
-#else
-#include <private/qsgdefaultrendercontext_p.h>
-typedef QSGDefaultRenderContext RenderContext;
-#endif
-
+#include <private/qquickitem_p.h>
 QSK_QT_PRIVATE_END
 
 #define GlyphFlag static_cast< QSGNode::Flag >( 0x800 )
 
-QskPlainTextRenderer::QskPlainTextRenderer():
-    m_fontMetrics( m_font )
+QSizeF QskPlainTextRenderer::textSize(
+    const QString& text, const QFont& font, const QskTextOptions& options )
 {
+    // result differs from QQuickText::implicitSizeHint ???
+    return textRect( text, font, options, QSizeF( 10e6, 10e6 ) ).size();
 }
 
-QskPlainTextRenderer::~QskPlainTextRenderer()
+QRectF QskPlainTextRenderer::textRect(
+    const QString& text, const QFont& font, const QskTextOptions& options,
+    const QSizeF& size )
 {
+    const QFontMetricsF fm( font );
+    const QRectF r( 0, 0, size.width(), size.height() );
+
+    return fm.boundingRect( r, options.textFlags(), text );
 }
 
-void QskPlainTextRenderer::setFont( const QFont& font )
+static qreal qskLayoutText( QTextLayout* layout,
+    qreal lineWidth, const QskTextOptions& options )
 {
-    m_font = font;
-    m_fontMetrics = QFontMetricsF( m_font );
-}
+    if ( layout->text().isEmpty() )
+        return 0.0;
 
-void QskPlainTextRenderer::setOptions( const QskTextOptions& options )
-{
-    m_options = options;
-}
-
-void QskPlainTextRenderer::setAlignment( Qt::Alignment alignment )
-{
-    m_alignment = alignment;
-}
-
-QSizeF QskPlainTextRenderer::implicitSizeHint( const QString& text ) const
-{
-    // result differs from QskTextRenderer::implicitSizeHint ???
-    return textRect( QSizeF( 10e6, 10e6 ), text ).size();
-}
-
-QRectF QskPlainTextRenderer::textRect( const QSizeF& size, const QString& text ) const
-{
-    return m_fontMetrics.boundingRect( { QPointF(), size }, flags(), text );
-}
-
-int QskPlainTextRenderer::flags() const
-{
-    return m_options.textFlags() | m_alignment;
-}
-
-static qreal qskLayoutText( QTextLayout* layout, const QPointF& position, qreal lineWidth,
-    const QskTextOptions& options )
-{
-    const auto maxLineCount = options.wrapMode() == QskTextOptions::NoWrap
-        ? 1 : options.maximumLineCount();
-    int lineNumber = 0;
-    int characterPosition = 0;
     qreal y = 0;
-    Q_FOREVER
+
+    const auto elideMode = options.effectiveElideMode();
+
+    if ( elideMode == Qt::ElideNone )
     {
-        if ( ++lineNumber > maxLineCount )
-            break;
-
-        if ( lineNumber == maxLineCount )
+        for ( int i = 0; i < options.maximumLineCount(); i++ )
         {
-            const auto elideMode = options.elideMode();
-            auto engine = layout->engine();
-            const auto textLength = engine->text.length();
-            if ( elideMode != Qt::ElideNone && textLength > characterPosition )
-            {
-                if ( lineNumber == 1 || elideMode == Qt::ElideRight )
-                {
-                    auto option = layout->textOption();
-                    option.setWrapMode( QTextOption::WrapAnywhere );
-                    layout->setTextOption( option );
+            auto line = layout->createLine();
+            if ( !line.isValid() )
+                break;
 
-                    auto elidedText = engine->elidedText(
-                        elideMode, QFixed::fromReal( lineWidth ),
-                        Qt::TextShowMnemonic, characterPosition )
-                        .leftJustified( textLength - characterPosition );
+            line.setPosition( QPointF( 0, y ) );
+            line.setLineWidth( lineWidth );
 
-                    engine->text.replace( characterPosition, elidedText.length(), elidedText );
-                    Q_ASSERT( engine->text.length() == textLength );
-                }
-            }
+            y += line.leading() + line.height();
         }
+    }
+    else
+    {
+        const auto engine = layout->engine();
+
+        auto text = engine->elidedText(
+            elideMode, QFixed::fromReal( lineWidth ),
+            Qt::TextShowMnemonic, 0 );
+
+        // why do we need this padding ???
+        text = text.leftJustified( engine->text.length() );
+        engine->text = text;
 
         auto line = layout->createLine();
-        if ( !line.isValid() )
-            break;
 
-        line.setPosition( position + QPointF( 0, y ) );
-        line.setLineWidth( lineWidth );
-        characterPosition = line.textStart() + line.textLength();
-        y += line.leading() + line.height();
+        if ( line.isValid() )
+        {
+            /*
+                For some reason the position of the text is wrong,
+                with QTextOption::NoWrap - even if word wrapping
+                for elided text does not make any sense.
+                Needs some debugging of QTextLine::layout_helper, TODO ...
+             */
+            auto option = layout->textOption();
+            option.setWrapMode( QTextOption::WrapAnywhere );
+            layout->setTextOption( option );
+
+            line.setPosition( QPointF( 0, y ) );
+            line.setLineWidth( lineWidth );
+
+            y += line.leading() + line.height();
+        }
     }
+
     return y;
 }
 
 static void qskRenderText(
-    QQuickItem* item, QSGNode* parentNode, QTextLayout* layout, const QPointF& position,
+    QQuickItem* item, QSGNode* parentNode, const QTextLayout& layout, qreal baseLine,
     const QColor& color, QQuickText::TextStyle style, const QColor& styleColor )
 {
-    auto rc = RenderContext::from( QOpenGLContext::currentContext() );
-    auto sgContext = rc->sceneGraphContext();
+    auto renderContext = QQuickItemPrivate::get(item)->sceneGraphRenderContext();
+    auto sgContext = renderContext->sceneGraphContext();
 
-    // Clear out foreign nodes (e.g. from QskTextRenderer)
+    // Clear out foreign nodes (e.g. from QskRichTextRenderer)
     QSGNode* node = parentNode->firstChild();
     while ( node )
     {
@@ -137,28 +117,41 @@ static void qskRenderText(
     }
 
     auto glyphNode = static_cast< QSGGlyphNode* >( parentNode->firstChild() );
-    for ( int i = 0; i < layout->lineCount(); ++i )
+
+    const QPointF position( 0, baseLine );
+
+    for ( int i = 0; i < layout.lineCount(); ++i )
     {
-        auto line = layout->lineAt( i );
-        for ( auto glyphRun : line.glyphRuns() )
+        const auto glyphRuns = layout.lineAt( i ).glyphRuns();
+
+        for ( const auto& glyphRun : glyphRuns )
         {
-            const bool doCreate = !glyphNode;
-            if ( doCreate )
+            if ( glyphNode == nullptr )
             {
-                glyphNode = sgContext->createGlyphNode( rc, false ); // ### add native rendering to QskTextOptions?
+                const bool preferNativeGlyphNode = false; // QskTextOptions?
+
+#if QT_VERSION >= QT_VERSION_CHECK( 6, 0, 0 )
+                constexpr int renderQuality = -1; // QQuickText::DefaultRenderTypeQuality
+                glyphNode = sgContext->createGlyphNode(
+                    renderContext, preferNativeGlyphNode, renderQuality );
+#else
+                glyphNode = sgContext->createGlyphNode(
+                    renderContext, preferNativeGlyphNode );
+#endif
                 glyphNode->setOwnerElement( item );
                 glyphNode->setFlags( QSGNode::OwnedByParent | GlyphFlag );
             }
+
             glyphNode->setStyle( style );
             glyphNode->setColor( color );
             glyphNode->setStyleColor( styleColor );
             glyphNode->setGlyphs( position, glyphRun );
             glyphNode->update();
-            if ( doCreate )
-            {
+
+            if ( glyphNode->parent() != parentNode )
                 parentNode->appendChildNode( glyphNode );
-            }
-            glyphNode = static_cast< decltype( glyphNode ) >( glyphNode->nextSibling() );
+
+            glyphNode = static_cast< QSGGlyphNode* >( glyphNode->nextSibling() );
         }
     }
 
@@ -175,33 +168,76 @@ static void qskRenderText(
     }
 }
 
-void QskPlainTextRenderer::updateNode(
-    const QQuickItem* item, const QRectF& rect, const QString& text, QSGNode* parentNode,
-    const QColor& textColor, Qsk::TextStyle style, const QColor& styleColor )
+void QskPlainTextRenderer::updateNode( const QString& text,
+    const QFont& font, const QskTextOptions& options,
+    Qsk::TextStyle style, const QskTextColors& colors,
+    Qt::Alignment alignment, const QRectF& rect,
+    const QQuickItem* item, QSGTransformNode* node )
 {
-    QTextOption textOption( m_alignment );
-    textOption.setWrapMode( static_cast< QTextOption::WrapMode >( m_options.wrapMode() ) );
+    QTextOption textOption( alignment );
+    textOption.setWrapMode( static_cast< QTextOption::WrapMode >( options.wrapMode() ) );
+
+    QString tmp = text;
+
+#if 0
+    const int pos = tmp.indexOf( QLatin1Char( '\x9c' ) );
+    if ( pos != -1 )
+    {
+        // ST: string termination
+
+        tmp = tmp.mid( 0, pos );
+        tmp.replace( QLatin1Char( '\n' ), QChar::LineSeparator );
+    }
+    else
+#endif
+    if ( tmp.contains( QLatin1Char( '\n' ) ) )
+    {
+        tmp.replace( QLatin1Char('\n'), QChar::LineSeparator );
+    }
+
 
     QTextLayout layout;
-    layout.setFont( m_font );
+    layout.setFont( font );
     layout.setTextOption( textOption );
-    layout.setText( text );
+    layout.setText( tmp );
 
     layout.beginLayout();
-    QPointF position;
-    position.ry() += qskLayoutText( &layout, position, rect.width(), m_options );
+    const qreal textHeight = qskLayoutText( &layout, rect.width(), options );
     layout.endLayout();
 
-    position.setX( 0 );
-    position.setY( m_fontMetrics.ascent()
-        + ( m_alignment & Qt::AlignVCenter
-            ? ( rect.height() - position.y() ) * 0.5 : 0 ) );
+    const qreal y0 = QFontMetricsF( font ).ascent();
 
-    qskRenderText( const_cast< QQuickItem* >( item ), parentNode, &layout, position,
-        textColor, static_cast< QQuickText::TextStyle >( style ), styleColor );
+    qreal yBaseline = y0;
+
+    if ( alignment & Qt::AlignVCenter )
+    {
+        yBaseline += ( rect.height() - textHeight ) * 0.5;
+    }
+    else if ( alignment & Qt::AlignBottom )
+    {
+        yBaseline += rect.height() - textHeight;
+    }
+
+    if ( yBaseline != y0 )
+    {
+        /*
+            We need to have a stable algo for rounding the text base line,
+            so that texts don't start wobbling, when processing transitions
+            between margins/paddings.
+         */
+
+        const int bh = int( layout.boundingRect().height() );
+        yBaseline = ( bh % 2 ) ? qFloor( yBaseline ) : qCeil( yBaseline );
+    }
+
+    qskRenderText(
+        const_cast< QQuickItem* >( item ), node, layout, yBaseline,
+        colors.textColor, static_cast< QQuickText::TextStyle >( style ),
+        colors.styleColor );
 }
 
-void QskPlainTextRenderer::updateNodeColor( QSGNode* parentNode, const QColor& textColor,
+void QskPlainTextRenderer::updateNodeColor(
+    QSGNode* parentNode, const QColor& textColor,
     Qsk::TextStyle style, const QColor& styleColor )
 {
     auto glyphNode = static_cast< QSGGlyphNode* >( parentNode->firstChild() );

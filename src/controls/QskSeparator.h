@@ -6,7 +6,6 @@
 #ifndef QSK_SEPARATOR_H
 #define QSK_SEPARATOR_H
 
-#include "QskGlobal.h"
 #include "QskControl.h"
 
 class QSK_EXPORT QskSeparator : public QskControl
@@ -16,24 +15,33 @@ class QSK_EXPORT QskSeparator : public QskControl
     Q_PROPERTY( Qt::Orientation orientation READ orientation
         WRITE setOrientation NOTIFY orientationChanged )
 
+    Q_PROPERTY( qreal extent READ extent
+        WRITE setExtent RESET resetExtent NOTIFY extentChanged )
+
     using Inherited = QskControl;
 
-public:
+  public:
     QSK_SUBCONTROLS( Panel )
 
     QskSeparator( QQuickItem* parent = nullptr );
     QskSeparator( Qt::Orientation, QQuickItem* parent = nullptr );
-    virtual ~QskSeparator();
+
+    ~QskSeparator() override;
 
     void setOrientation( Qt::Orientation );
     Qt::Orientation orientation() const;
 
-    virtual QSizeF contentsSizeHint() const override;
+    void setExtent( qreal );
+    void resetExtent();
+    qreal extent() const;
 
-Q_SIGNALS:
+    QskAspect::Placement effectivePlacement() const override;
+
+  Q_SIGNALS:
     void orientationChanged( Qt::Orientation );
+    void extentChanged( qreal );
 
-private:
+  private:
     Qt::Orientation m_orientation;
 };
 

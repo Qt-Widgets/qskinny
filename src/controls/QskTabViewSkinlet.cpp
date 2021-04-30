@@ -5,90 +5,111 @@
 
 #include "QskTabViewSkinlet.h"
 #include "QskTabView.h"
+
 #include "QskTabBar.h"
 
-QskTabViewSkinlet::QskTabViewSkinlet( QskSkin* skin ):
-    Inherited( skin )
+QskTabViewSkinlet::QskTabViewSkinlet( QskSkin* skin )
+    : Inherited( skin )
 {
     setNodeRoles( { PageRole } );
 }
 
 QskTabViewSkinlet::~QskTabViewSkinlet() = default;
 
-QRectF QskTabViewSkinlet::subControlRect(
-    const QskSkinnable* skinnable, QskAspect::Subcontrol subControl ) const
+QRectF QskTabViewSkinlet::subControlRect( const QskSkinnable* skinnable,
+    const QRectF& contentsRect, QskAspect::Subcontrol subControl ) const
 {
     const auto tabView = static_cast< const QskTabView* >( skinnable );
 
     if ( subControl == QskTabView::Page )
-        return pageRect( tabView );
+    {
+        return pageRect( tabView, contentsRect );
+    }
 
     if ( subControl == QskTabView::TabBar )
-        return tabBarRect( tabView );
+    {
+        return tabBarRect( tabView, contentsRect );
+    }
 
-    return Inherited::subControlRect( skinnable, subControl );
+    return Inherited::subControlRect( skinnable, contentsRect, subControl );
 }
 
-QRectF QskTabViewSkinlet::pageRect( const QskTabView* tabView ) const
+QSGNode* QskTabViewSkinlet::updateSubNode(
+    const QskSkinnable* skinnable, quint8 nodeRole, QSGNode* node ) const
 {
-    const QRectF barRect = subControlRect( tabView, QskTabView::TabBar );
-
-    QRectF r = tabView->contentsRect();
-
-    if ( tabView->orientation() == Qt::Vertical )
-    {
-        r.setTop( barRect.bottom() );
-    }
-    else
-    {
-        if ( tabView->layoutMirroring() )
-            r.setRight( r.right() - barRect.left() );
-        else
-            r.setLeft( barRect.right() );
-    }
-
-    return r;
-}
-
-QRectF QskTabViewSkinlet::tabBarRect( const QskTabView* tabView ) const
-{
-    QRectF r = tabView->layoutRect();
-    const QSizeF hint = tabView->tabBar()->sizeHint();
-
-    if ( tabView->orientation() == Qt::Vertical )
-    {
-        r.setHeight( hint.height() );
-    }
-    else
-    {
-        r.setWidth( hint.width() );
-
-        if ( tabView->layoutMirroring() )
-            r.moveLeft( r.right() - r.width() );
-    }
-
-    return r;
-}
-
-QSGNode* QskTabViewSkinlet::updateSubNode( const QskSkinnable* skinnable,
-    quint8 nodeRole, QSGNode* node ) const
-{
-    const auto tabView = static_cast< const QskTabView* >( skinnable );
-
-    switch( nodeRole )
+    switch ( nodeRole )
     {
         case PageRole:
-            return updatePageNode( tabView, node );
-
-        default:
-            return nullptr;
+        {
+            return updateBoxNode( skinnable, node, QskTabView::Page );
+        }
     }
+
+    return Inherited::updateSubNode( skinnable, nodeRole, node );
 }
 
-QSGNode* QskTabViewSkinlet::updatePageNode(
-    const QskTabView* tabView, QSGNode* node ) const
+QRectF QskTabViewSkinlet::pageRect(
+    const QskTabView* tabView, const QRectF& rect ) const
 {
-    return updateBoxNode( tabView, node, QskTabView::Page );
+    const QRectF barRect = subControlRect( tabView, rect, QskTabView::TabBar );
+
+#if 1
+    QRectF r = tabView->layoutRect();
+#endif
+
+    switch( tabView->tabPosition() )
+    {
+        case Qsk::Top:
+            r.setTop( barRect.bottom() );
+            break;
+
+        case Qsk::Bottom:
+            r.setBottom( barRect.top() );
+            break;
+
+        case Qsk::Left:
+            r.setLeft( barRect.right() );
+            break;
+
+        case Qsk::Right:
+            r.setRight( barRect.left() );
+            break;
+    }
+
+    return r;
+}
+
+QRectF QskTabViewSkinlet::tabBarRect(
+    const QskTabView* tabView, const QRectF& rect ) const
+{
+    Q_UNUSED( rect )
+
+    const QSizeF barSize = tabView->tabBar()->sizeConstraint();
+
+#if 1
+    QRectF r = tabView->layoutRect();
+#endif
+
+    switch( tabView->tabPosition() )
+    {
+        case Qsk::Top:
+            r.setHeight( barSize.height() );
+            break;
+
+        case Qsk::Bottom:
+            r.setTop( r.bottom() - barSize.height() );
+            break;
+
+        case Qsk::Left:
+            r.setWidth( barSize.width() );
+            break;
+
+        case Qsk::Right:
+            r.setLeft( r.right() - barSize.width() );
+            break;
+    }
+
+    return r;
 }
 
 #include "moc_QskTabViewSkinlet.cpp"

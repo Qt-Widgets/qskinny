@@ -4,13 +4,11 @@
  *****************************************************************************/
 
 #include "QskSubWindowArea.h"
-#include "QskSubWindow.h"
-#include "QskGradient.h"
-#include "QskSkinlet.h"
-#include "QskFunctions.h"
 #include "QskEvent.h"
+#include "QskFunctions.h"
+#include "QskSubWindow.h"
 
-#include <QTimer>
+#include <qtimer.h>
 
 QSK_SUBCONTROL( QskSubWindowArea, Panel )
 
@@ -52,7 +50,7 @@ static Qt::Edges qskSelectedEdges( const QRectF& rect, const QPointF& pos )
     return edges;
 }
 
-void qskDragWindow( const QPointF& off, Qt::Edges edges, QskSubWindow* window )
+static void qskDragWindow( const QPointF& off, Qt::Edges edges, QskSubWindow* window )
 {
     if ( edges == 0 )
     {
@@ -80,60 +78,31 @@ void qskDragWindow( const QPointF& off, Qt::Edges edges, QskSubWindow* window )
 
 class QskSubWindowArea::PrivateData
 {
-public:
-    PrivateData():
-        isDraggableByHeaderOnly( false ),
-        isDragging( false )
+  public:
+    PrivateData()
+        : isDraggableByHeaderOnly( false )
+        , isDragging( false )
     {
     }
-
-    QskGradient gradient;
 
     // data about the window being dragged
 
     bool isDraggableByHeaderOnly : 1;
     bool isDragging : 1;
     Qt::Edges draggedEdges;
-    QPoint mousePos;
+    QPointF mousePos;
 };
 
-QskSubWindowArea::QskSubWindowArea( QQuickItem* parent ):
-    Inherited( parent ),
-    m_data( new PrivateData() )
+QskSubWindowArea::QskSubWindowArea( QQuickItem* parent )
+    : Inherited( parent )
+    , m_data( new PrivateData() )
 {
     setMargins( 0 );
-    //setAcceptedMouseButtons( Qt::AllButtons );
+    // setAcceptedMouseButtons( Qt::AllButtons );
 }
 
 QskSubWindowArea::~QskSubWindowArea()
 {
-}
-
-void QskSubWindowArea::setGradient( const QskGradient& gradient )
-{
-    if ( gradient != m_data->gradient )
-    {
-        m_data->gradient = gradient;
-
-        update();
-        Q_EMIT gradientChanged();
-    }
-}
-
-QskGradient QskSubWindowArea::gradient() const
-{
-    return m_data->gradient;
-}
-
-void QskSubWindowArea::resetGradient()
-{
-    if ( m_data->gradient.isValid() )
-    {
-        m_data->gradient.invalidate();
-        update();
-
-        Q_EMIT gradientChanged();
-    }
 }
 
 void QskSubWindowArea::geometryChangeEvent( QskGeometryChangeEvent* event )
@@ -146,19 +115,19 @@ void QskSubWindowArea::geometryChangeEvent( QskGeometryChangeEvent* event )
     Inherited::geometryChangeEvent( event );
 }
 
-void QskSubWindowArea::itemChange( QQuickItem::ItemChange change,
-    const QQuickItem::ItemChangeData& value )
+void QskSubWindowArea::itemChange(
+    QQuickItem::ItemChange change, const QQuickItem::ItemChangeData& value )
 {
     Inherited::itemChange( change, value );
 
-    switch( change )
+    switch ( change )
     {
         case QQuickItem::ItemChildAddedChange:
         {
             // the child is not fully constructed
-            // and we have delay checking for sub windows
+            // and we have to delay checking for sub windows
             QTimer::singleShot( 0, this,
-                [ = ] { qskUpdateEventFilter( this ); } );
+                [ this ] { qskUpdateEventFilter( this ); } );
 
             break;
         }
@@ -173,7 +142,6 @@ void QskSubWindowArea::itemChange( QQuickItem::ItemChange change,
         {
             break;
         }
-
     }
 }
 
@@ -220,20 +188,25 @@ bool QskSubWindowArea::mouseEventFilter( QskSubWindow* window, const QMouseEvent
 
     const QRectF cr = window->contentsRect();
 
-    switch( event->type() )
+    switch ( event->type() )
     {
         case QEvent::MouseButtonPress:
         {
-            if ( !( cr.contains( event->localPos() )
-                && event->button() == Qt::LeftButton ) )
+            const auto mousePos = qskMousePosition( event );
+
+            if ( !( cr.contains( mousePos ) &&
+                event->button() == Qt::LeftButton ) )
             {
                 return false;
             }
 
+            if ( event->button() == Qt::LeftButton )
+                window->setFocus( true );
+
 #if 0
             // how to handle not to be process visual
             // changes for double click events ???
-            if ( window->titleBarRect().contains( event->localPos() )
+            if ( window->titleBarRect().contains( event->localPos() ) )
             {
                 // block button press until we know it is no double click
                 ///QGuiApplication::styleHints()->mouseDoubleClickInterval()
@@ -243,14 +216,14 @@ bool QskSubWindowArea::mouseEventFilter( QskSubWindow* window, const QMouseEvent
             if ( !doDrag )
             {
                 // dragging by title bar only
-                doDrag = window->titleBarRect().contains( event->localPos() );
+                doDrag = window->titleBarRect().contains( mousePos );
             }
 
             if ( doDrag )
             {
                 m_data->isDragging = true;
-                m_data->draggedEdges = qskSelectedEdges( cr, event->localPos() );
-                m_data->mousePos = event->globalPos();
+                m_data->draggedEdges = qskSelectedEdges( cr, mousePos );
+                m_data->mousePos = qskMouseScenePosition( event );
 
                 setDragging( window, true );
                 return true;
@@ -262,10 +235,12 @@ bool QskSubWindowArea::mouseEventFilter( QskSubWindow* window, const QMouseEvent
         {
             if ( m_data->isDragging )
             {
-                qskDragWindow( event->globalPos() - m_data->mousePos,
+                const auto scenePos = qskMouseScenePosition( event );
+
+                qskDragWindow( scenePos - m_data->mousePos,
                     m_data->draggedEdges, window );
 
-                m_data->mousePos = event->globalPos();
+                m_data->mousePos = scenePos;
                 return true;
             }
             break;
@@ -276,7 +251,7 @@ bool QskSubWindowArea::mouseEventFilter( QskSubWindow* window, const QMouseEvent
             {
                 setDragging( window, false );
 
-                m_data->mousePos = QPoint();
+                m_data->mousePos = QPointF();
                 m_data->isDragging = false;
 
                 return true;

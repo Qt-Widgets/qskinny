@@ -4,17 +4,17 @@
  *****************************************************************************/
 
 #include "QskSetup.h"
-#include "QskSkin.h"
-#include "QskSkinFactory.h"
-#include "QskGraphicProviderMap.h"
 #include "QskControl.h"
-#include "QskInputPanel.h"
-#include "QskWindow.h"
+#include "QskControlPrivate.h"
+#include "QskGraphicProviderMap.h"
 #include "QskObjectTree.h"
+#include "QskSkin.h"
+#include "QskSkinManager.h"
+#include "QskWindow.h"
 
-#include <QCoreApplication>
-#include <QPointer>
-#include <QDebug>
+#include <qguiapplication.h>
+#include <qpointer.h>
+#include <qstylehints.h>
 
 QskSetup* QskSetup::s_instance = nullptr;
 
@@ -31,30 +31,30 @@ static inline bool qskHasEnvironment( const char* env )
     return !result.isEmpty() && result != "false";
 }
 
-static inline const QskSetup::Flags qskEnvironmentFlags()
+static inline const QskQuickItem::UpdateFlags qskEnvironmentUpdateFlags()
 {
-    QskSetup::Flags flags;
+    QskQuickItem::UpdateFlags flags;
 
     if ( qskHasEnvironment( "QSK_PREFER_RASTER" ) )
-        flags |= QskSetup::PreferRasterForTextures;
+        flags |= QskQuickItem::PreferRasterForTextures;
 
     if ( qskHasEnvironment( "QSK_FORCE_BACKGROUND" ) )
-        flags |= QskSetup::DebugForceBackground;
+        flags |= QskQuickItem::DebugForceBackground;
 
     return flags;
 }
 
-static inline QskSetup::Flags qskDefaultControlFlags()
+static inline QskQuickItem::UpdateFlags qskDefaultUpdateFlags()
 {
-    static QskSetup::Flags flags;
+    static QskQuickItem::UpdateFlags flags;
 
     if ( flags == 0 )
     {
-        flags |= QskSetup::DeferredUpdate;
-        flags |= QskSetup::DeferredPolish;
-        flags |= QskSetup::DeferredLayout;
-        flags |= QskSetup::CleanupOnVisibility;
-        flags |= qskEnvironmentFlags();
+        flags |= QskQuickItem::DeferredUpdate;
+        flags |= QskQuickItem::DeferredPolish;
+        flags |= QskQuickItem::DeferredLayout;
+        flags |= QskQuickItem::CleanupOnVisibility;
+        flags |= qskEnvironmentUpdateFlags();
     }
 
     return flags;
@@ -66,40 +66,45 @@ static void qskApplicationHook()
     qAddPostRoutine( QskSetup::cleanup );
 }
 
-Q_CONSTRUCTOR_FUNCTION( qskApplicationHook )
+static void qskApplicationFilter()
+{
+    QCoreApplication::instance()->installEventFilter( QskSetup::instance() );
+}
 
-extern bool qskInheritLocale( QskControl*, const QLocale& );
+Q_CONSTRUCTOR_FUNCTION( qskApplicationHook )
+Q_COREAPP_STARTUP_FUNCTION( qskApplicationFilter )
+
 extern bool qskInheritLocale( QskWindow*, const QLocale& );
 
 namespace
 {
     class VisitorLocale final : public QskObjectTree::ResolveVisitor< QLocale >
     {
-    public:
-        VisitorLocale():
-            ResolveVisitor< QLocale >( "locale" )
+      public:
+        VisitorLocale()
+            : ResolveVisitor< QLocale >( "locale" )
         {
         }
 
-    private:
-        virtual bool setImplicitValue(
-            QskControl* control, const QLocale& locale ) override final
+      private:
+        bool setImplicitValue( QskControl* control,
+            const QLocale& locale ) override
         {
-            return qskInheritLocale( control, locale );
+            return QskControlPrivate::inheritLocale( control, locale );
         }
 
-        virtual bool setImplicitValue(
-            QskWindow* window, const QLocale& locale ) override final
+        bool setImplicitValue( QskWindow* window,
+            const QLocale& locale ) override
         {
             return qskInheritLocale( window, locale );
         }
 
-        virtual QLocale value( const QskControl* control ) const override final
+        QLocale value( const QskControl* control ) const override
         {
             return control->locale();
         }
 
-        virtual QLocale value( const QskWindow* window ) const override final
+        QLocale value( const QskWindow* window ) const override
         {
             return window->locale();
         }
@@ -108,9 +113,9 @@ namespace
 
 class QskSetup::PrivateData
 {
-public:
-    PrivateData():
-        controlFlags( qskDefaultControlFlags() )
+  public:
+    PrivateData()
+        : itemUpdateFlags( qskDefaultUpdateFlags() )
     {
     }
 
@@ -118,13 +123,11 @@ public:
     QPointer< QskSkin > skin;
 
     QskGraphicProviderMap graphicProviders;
-
-    QPointer< QskInputPanel > inputPanel;
-    QskSetup::Flags controlFlags;
+    QskQuickItem::UpdateFlags itemUpdateFlags;
 };
 
-QskSetup::QskSetup():
-    m_data( new PrivateData() )
+QskSetup::QskSetup()
+    : m_data( new PrivateData() )
 {
 }
 
@@ -141,53 +144,50 @@ void QskSetup::setup()
 
 void QskSetup::cleanup()
 {
-    if ( s_instance )
+    delete s_instance;
+    s_instance = nullptr;
+}
+
+void QskSetup::setItemUpdateFlags( QskQuickItem::UpdateFlags flags )
+{
+    if ( m_data->itemUpdateFlags != flags )
     {
-        delete s_instance;
-        s_instance = nullptr;
+        m_data->itemUpdateFlags = flags;
+        Q_EMIT itemUpdateFlagsChanged();
     }
 }
 
-void QskSetup::setControlFlags( QskSetup::Flags flags )
+QskQuickItem::UpdateFlags QskSetup::itemUpdateFlags() const
 {
-    if ( m_data->controlFlags != flags )
-    {
-        m_data->controlFlags = flags;
-        Q_EMIT controlFlagsChanged();
-    }
+    return m_data->itemUpdateFlags;
 }
 
-QskSetup::Flags QskSetup::controlFlags() const
+void QskSetup::resetItemUpdateFlags()
 {
-    return m_data->controlFlags;
+    setItemUpdateFlags( qskDefaultUpdateFlags() );
 }
 
-void QskSetup::resetControlFlags()
+void QskSetup::setItemUpdateFlag( QskQuickItem::UpdateFlag flag, bool on )
 {
-    setControlFlags( qskDefaultControlFlags() );
-}
-
-void QskSetup::setControlFlag( QskSetup::Flag flag, bool on )
-{
-    if ( m_data->controlFlags.testFlag( flag ) != on )
+    if ( m_data->itemUpdateFlags.testFlag( flag ) != on )
     {
         if ( on )
-            m_data->controlFlags |= flag;
+            m_data->itemUpdateFlags |= flag;
         else
-            m_data->controlFlags &= ~flag;
+            m_data->itemUpdateFlags &= ~flag;
 
-        Q_EMIT controlFlagsChanged();
+        Q_EMIT itemUpdateFlagsChanged();
     }
 }
 
-void QskSetup::resetControlFlag( QskSetup::Flag flag )
+void QskSetup::resetItemUpdateFlag( QskQuickItem::UpdateFlag flag )
 {
-    setControlFlag( flag, flag & qskDefaultControlFlags() );
+    setItemUpdateFlag( flag, flag & qskDefaultUpdateFlags() );
 }
 
-bool QskSetup::testControlFlag( QskSetup::Flag flag )
+bool QskSetup::testItemUpdateFlag( QskQuickItem::UpdateFlag flag )
 {
-    return m_data->controlFlags.testFlag( flag );
+    return m_data->itemUpdateFlags.testFlag( flag );
 }
 
 QskSkin* QskSetup::setSkin( const QString& skinName )
@@ -195,7 +195,7 @@ QskSkin* QskSetup::setSkin( const QString& skinName )
     if ( m_data->skin && ( skinName == m_data->skinName ) )
         return m_data->skin;
 
-    QskSkin* skin = Qsk::createSkin( skinName );
+    QskSkin* skin = QskSkinManager::instance()->createSkin( skinName );
     if ( skin == nullptr )
         return nullptr;
 
@@ -223,33 +223,13 @@ QString QskSetup::skinName() const
     return m_data->skinName;
 }
 
-void QskSetup::setSkin( QskSkin* skin, const QString& skinName )
-{
-    if ( skin == m_data->skin )
-        return;
-
-    if ( skin && skin->parent() == nullptr )
-        skin->setParent( this );
-
-    const QskSkin* oldSkin = m_data->skin;
-
-    m_data->skin = skin;
-    m_data->skinName = skinName;
-
-    if ( oldSkin )
-    {
-        Q_EMIT skinChanged( skin );
-
-        if ( oldSkin->parent() == this )
-            delete oldSkin;
-    }
-}
-
 QskSkin* QskSetup::skin()
 {
     if ( m_data->skin == nullptr )
     {
-        m_data->skin = Qsk::createSkin( nullptr );
+        m_data->skin = QskSkinManager::instance()->createSkin( QString() );
+        Q_ASSERT( m_data->skin );
+
         m_data->skin->setParent( this );
         m_data->skinName = m_data->skin->objectName();
     }
@@ -260,7 +240,7 @@ QskSkin* QskSetup::skin()
 void QskSetup::addGraphicProvider( const QString& providerId, QskGraphicProvider* provider )
 {
     m_data->graphicProviders.insert( providerId, provider );
-}       
+}
 
 QskGraphicProvider* QskSetup::graphicProvider( const QString& providerId ) const
 {
@@ -272,20 +252,6 @@ QskGraphicProvider* QskSetup::graphicProvider( const QString& providerId ) const
     }
 
     return m_data->graphicProviders.provider( providerId );
-}   
-
-void QskSetup::setInputPanel( QskInputPanel* inputPanel )
-{
-    if ( m_data->inputPanel == inputPanel )
-        return;
-
-    m_data->inputPanel = inputPanel;
-    Q_EMIT inputPanelChanged( m_data->inputPanel );
-}
-
-QskInputPanel* QskSetup::inputPanel()
-{
-    return m_data->inputPanel;
 }
 
 QLocale QskSetup::inheritedLocale( const QObject* object )
@@ -297,13 +263,81 @@ QLocale QskSetup::inheritedLocale( const QObject* object )
     return visitor.resolveValue();
 }
 
-
 void QskSetup::inheritLocale( QObject* object, const QLocale& locale )
 {
     VisitorLocale visitor;
     visitor.setResolveValue( locale );
 
     QskObjectTree::traverseDown( object, visitor );
+}
+
+bool QskSetup::eventFilter( QObject* object, QEvent* event )
+{
+    if ( auto control = qskControlCast( object ) )
+    {
+        /*
+            Qt::FocusPolicy has always been there with widgets, got lost with
+            Qt/Quick and has been reintroduced with Qt/Quick Controls 2 ( QC2 ).
+            Unfortunately this was done once more by adding code on top instead
+            of fixing the foundation.
+
+            But we also don't want to have how it is done in QC2 by adding
+            the focus management in the event handler of the base class.
+            This implementation reverts the expected default behaviour of when
+            events are accepted/ignored + is an error prone nightmare, when it
+            comes to overloading event handlers missing to call the base class.
+
+            That's why we prefer to do the focus management outside of the
+            event handlers.
+         */
+        switch ( event->type() )
+        {
+            case QEvent::MouseButtonPress:
+            case QEvent::MouseButtonRelease:
+            {
+                if ( ( control->focusPolicy() & Qt::ClickFocus ) == Qt::ClickFocus )
+                {
+                    const bool focusOnRelease =
+                        QGuiApplication::styleHints()->setFocusOnTouchRelease();
+
+                    if ( focusOnRelease )
+                    {
+                        if ( event->type() == QEvent::MouseButtonRelease )
+                            control->forceActiveFocus( Qt::MouseFocusReason );
+                    }
+                    else
+                    {
+                        if ( event->type() == QEvent::MouseButtonPress )
+                            control->forceActiveFocus( Qt::MouseFocusReason );
+                    }
+                }
+                break;
+            }
+            case QEvent::Wheel:
+            {
+                if ( !control->isWheelEnabled() )
+                {
+                    /*
+                        We block further processing of the event. This is in line
+                        with not receiving any mouse event that have not been
+                        explicitly enabled with setAcceptedMouseButtons().
+
+                     */
+                    event->ignore();
+                    return true;
+                }
+
+                if ( ( control->focusPolicy() & Qt::WheelFocus ) == Qt::WheelFocus )
+                    control->forceActiveFocus( Qt::MouseFocusReason );
+
+                break;
+            }
+            default:
+                break;
+        }
+    }
+
+    return false;
 }
 
 QskSetup* QskSetup::qmlAttachedProperties( QObject* )

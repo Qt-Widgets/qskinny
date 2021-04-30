@@ -1,57 +1,62 @@
-QSK_ROOT = $${PWD}/..
-QSK_OUT_ROOT = $${OUT_PWD}/..
-
-include( $${QSK_ROOT}/qskconfig.pri )
-
 TEMPLATE = lib
-TARGET   = qskinny
-
-QSK_VER_MAJ      = 0
-QSK_VER_MIN      = 0
-QSK_VER_PAT      = 1
-QSK_VERSION      = $${QSK_VER_MAJ}.$${QSK_VER_MIN}.$${QSK_VER_PAT}
-
-DESTDIR  = $${QSK_OUT_ROOT}/lib
+TARGET   = $$qskLibraryTarget(qskinny)
 
 QT += quick quick-private
-CONFIG += no_private_qt_headers_warning
 
-contains(QSK_CONFIG, QskDll) {
+contains(QSK_CONFIG, QskDll): DEFINES += QSK_MAKEDLL
 
-    CONFIG += dll
-    DEFINES += QSK_DLL QSK_MAKEDLL
-}
-else {
-    CONFIG += staticlib
-}
-
-QSK_SUBDIRS = common graphic nodes controls layouts dialogs skins
+QSK_SUBDIRS = common graphic nodes controls layouts dialogs inputpanel
 INCLUDEPATH *= $${QSK_SUBDIRS}
 DEPENDPATH *= $${QSK_SUBDIRS}
 
+# DEFINES += QSK_LAYOUT_COMPAT
+
 HEADERS += \
     common/QskAspect.h \
-    common/QskBoxOptions.h \
+    common/QskBoxBorderColors.h \
+    common/QskBoxBorderMetrics.h \
+    common/QskBoxShapeMetrics.h \
     common/QskCorner.h \
     common/QskFlags.h \
     common/QskFunctions.h \
     common/QskGlobal.h \
     common/QskGradient.h \
-    common/QskModule.h \
+    common/QskIntervalF.h \
+    common/QskMargins.h \
+    common/QskMetaFunction.h \
+    common/QskMetaFunction.hpp \
+    common/QskMetaInvokable.h \
     common/QskNamespace.h \
     common/QskObjectCounter.h \
+    common/QskRgbValue.h \
+    common/QskRgbPalette.h \
+    common/QskScaleEngine.h \
+    common/QskScaleTickmarks.h \
+    common/QskShadowMetrics.h \
     common/QskSizePolicy.h \
+    common/QskTextColors.h \
     common/QskTextOptions.h
 
 SOURCES += \
     common/QskAspect.cpp \
-    common/QskBoxOptions.cpp \
+    common/QskBoxBorderColors.cpp \
+    common/QskBoxBorderMetrics.cpp \
+    common/QskBoxShapeMetrics.cpp \
     common/QskCorner.cpp \
     common/QskFunctions.cpp \
     common/QskGradient.cpp \
-    common/QskModule.cpp \
+    common/QskIntervalF.cpp \
+    common/QskMargins.cpp \
+    common/QskMetaFunction.cpp \
+    common/QskMetaInvokable.cpp \
     common/QskObjectCounter.cpp \
+    common/QskRgbValue.cpp \
+    common/QskRgbPalette.cpp \
+    common/QskScaleEngine.cpp \
+    common/QskScaleTickmarks.cpp \
+    common/QskShadowMetrics.cpp \
     common/QskSizePolicy.cpp \
+    common/QskTextColors.cpp \
     common/QskTextOptions.cpp
 
 HEADERS += \
@@ -79,49 +84,54 @@ SOURCES += \
     graphic/QskStandardSymbol.cpp
 
 HEADERS += \
-    nodes/QskArcIterator.h \
-    nodes/QskBorderGeometry.h \
-    nodes/QskBoxMaterial.h \
-    nodes/QskBoxMaterialVM.h \
     nodes/QskBoxNode.h \
-    nodes/QskClipNode.h \
-    nodes/QskFrameNode.h \
+    nodes/QskBoxClipNode.h \
+    nodes/QskBoxRenderer.h \
+    nodes/QskBoxRendererColorMap.h \
     nodes/QskGraphicNode.h \
+    nodes/QskPaintedNode.h \
     nodes/QskPlainTextRenderer.h \
-    nodes/QskRectNode.h \
+    nodes/QskRichTextRenderer.h \
+    nodes/QskScaleRenderer.h \
+    nodes/QskSGNode.h \
     nodes/QskTextNode.h \
     nodes/QskTextRenderer.h \
     nodes/QskTextureNode.h \
-    nodes/QskVertexColor.h \
-    nodes/QskVertexPen.h \
-    nodes/QskVertexRendererColored.h \
-    nodes/QskVertexRenderer.h
+    nodes/QskTextureRenderer.h \
+    nodes/QskTickmarksNode.h \
+    nodes/QskVertex.h
 
 SOURCES += \
-    nodes/QskArcIterator.cpp \
-    nodes/QskBorderGeometry.cpp \
-    nodes/QskBoxMaterial.cpp \
-    nodes/QskBoxMaterialVM.cpp \
     nodes/QskBoxNode.cpp \
-    nodes/QskClipNode.cpp \
-    nodes/QskFrameNode.cpp \
+    nodes/QskBoxClipNode.cpp \
+    nodes/QskBoxRendererRect.cpp \
+    nodes/QskBoxRendererEllipse.cpp \
+    nodes/QskBoxRendererDEllipse.cpp \
     nodes/QskGraphicNode.cpp \
+    nodes/QskPaintedNode.cpp \
     nodes/QskPlainTextRenderer.cpp \
-    nodes/QskRectNode.cpp \
+    nodes/QskRichTextRenderer.cpp \
+    nodes/QskScaleRenderer.cpp \
+    nodes/QskSGNode.cpp \
     nodes/QskTextNode.cpp \
     nodes/QskTextRenderer.cpp \
     nodes/QskTextureNode.cpp \
-    nodes/QskVertexColor.cpp \
-    nodes/QskVertexPen.cpp \
-    nodes/QskVertexRendererColored.cpp \
-    nodes/QskVertexRenderer.cpp
+    nodes/QskTextureRenderer.cpp \
+    nodes/QskTickmarksNode.cpp \
+    nodes/QskVertex.cpp
 
 HEADERS += \
     controls/QskAbstractButton.h \
+    controls/QskAnimationHint.h \
     controls/QskAnimator.h \
+    controls/QskBoundedControl.h \
+    controls/QskBoundedInput.h \
+    controls/QskBoundedRangeInput.h \
+    controls/QskBoundedValueInput.h \
     controls/QskBox.h \
     controls/QskBoxSkinlet.h \
     controls/QskControl.h \
+    controls/QskControlPrivate.h \
     controls/QskDirtyItemFilter.h \
     controls/QskEvent.h \
     controls/QskFlickAnimator.h \
@@ -132,11 +142,7 @@ HEADERS += \
     controls/QskGraphicLabel.h \
     controls/QskGraphicLabelSkinlet.h \
     controls/QskHintAnimator.h \
-    controls/QskImage.h \
-    controls/QskInputPanel.h \
-    controls/QskInputPanelSkinlet.h \
-    controls/QskLineEdit.h \
-    controls/QskLineEditSkinlet.h \
+    controls/QskInputGrabber.h \
     controls/QskListView.h \
     controls/QskListViewSkinlet.h \
     controls/QskObjectTree.h \
@@ -147,24 +153,28 @@ HEADERS += \
     controls/QskPopupSkinlet.h \
     controls/QskPushButton.h \
     controls/QskPushButtonSkinlet.h \
-    controls/QskRangeControl.h \
-    controls/QskResizable.h \
-    controls/QskRgbValue.h \
+    controls/QskProgressBar.h \
+    controls/QskProgressBarSkinlet.h \
+    controls/QskQuick.h \
+    controls/QskQuickItem.h \
+    controls/QskQuickItemPrivate.h \
     controls/QskScrollArea.h \
+    controls/QskScrollBox.h \
     controls/QskScrollView.h \
     controls/QskScrollViewSkinlet.h \
     controls/QskSeparator.h \
     controls/QskSeparatorSkinlet.h \
     controls/QskSetup.h \
-    controls/QskShortcut.h \
+    controls/QskShortcutMap.h \
     controls/QskSimpleListBox.h \
-    controls/QskSkinFactory.h \
     controls/QskSkin.h \
-    controls/QskAnimationHint.h \
+    controls/QskSkinFactory.h \
+    controls/QskSkinHintTable.h \
+    controls/QskSkinHintTableEditor.h \
+    controls/QskSkinManager.h \
+    controls/QskSkinTransition.h \
     controls/QskSkinlet.h \
     controls/QskSkinnable.h \
-    controls/QskSkinRenderer.h \
-    controls/QskSkinTransition.h \
     controls/QskSlider.h \
     controls/QskSliderSkinlet.h \
     controls/QskStatusIndicator.h \
@@ -178,6 +188,8 @@ HEADERS += \
     controls/QskTabButtonSkinlet.h \
     controls/QskTabView.h \
     controls/QskTabViewSkinlet.h \
+    controls/QskTextInput.h \
+    controls/QskTextInputSkinlet.h \
     controls/QskTextLabel.h \
     controls/QskTextLabelSkinlet.h \
     controls/QskVariantAnimator.h \
@@ -186,9 +198,14 @@ HEADERS += \
 SOURCES += \
     controls/QskAbstractButton.cpp \
     controls/QskAnimator.cpp \
+    controls/QskBoundedControl.cpp \
+    controls/QskBoundedInput.cpp \
+    controls/QskBoundedRangeInput.cpp \
+    controls/QskBoundedValueInput.cpp \
     controls/QskBox.cpp \
     controls/QskBoxSkinlet.cpp \
     controls/QskControl.cpp \
+    controls/QskControlPrivate.cpp \
     controls/QskDirtyItemFilter.cpp \
     controls/QskEvent.cpp \
     controls/QskFlickAnimator.cpp \
@@ -199,11 +216,7 @@ SOURCES += \
     controls/QskGraphicLabel.cpp \
     controls/QskGraphicLabelSkinlet.cpp \
     controls/QskHintAnimator.cpp \
-    controls/QskImage.cpp \
-    controls/QskInputPanel.cpp \
-    controls/QskInputPanelSkinlet.cpp \
-    controls/QskLineEdit.cpp \
-    controls/QskLineEditSkinlet.cpp \
+    controls/QskInputGrabber.cpp \
     controls/QskListView.cpp \
     controls/QskListViewSkinlet.cpp \
     controls/QskObjectTree.cpp \
@@ -214,23 +227,28 @@ SOURCES += \
     controls/QskPopupSkinlet.cpp \
     controls/QskPushButton.cpp \
     controls/QskPushButtonSkinlet.cpp \
-    controls/QskRangeControl.cpp \
-    controls/QskResizable.cpp \
-    controls/QskRgbValue.cpp \
+    controls/QskProgressBar.cpp \
+    controls/QskProgressBarSkinlet.cpp \
+    controls/QskQuick.cpp \
+    controls/QskQuickItem.cpp \
+    controls/QskQuickItemPrivate.cpp \
     controls/QskScrollArea.cpp \
+    controls/QskScrollBox.cpp \
     controls/QskScrollView.cpp \
     controls/QskScrollViewSkinlet.cpp \
     controls/QskSeparator.cpp \
     controls/QskSeparatorSkinlet.cpp \
     controls/QskSetup.cpp \
-    controls/QskShortcut.cpp \
+    controls/QskShortcutMap.cpp \
     controls/QskSimpleListBox.cpp \
     controls/QskSkin.cpp \
+    controls/QskSkinHintTable.cpp \
+    controls/QskSkinHintTableEditor.cpp \
     controls/QskSkinFactory.cpp \
+    controls/QskSkinManager.cpp \
+    controls/QskSkinTransition.cpp \
     controls/QskSkinlet.cpp \
     controls/QskSkinnable.cpp \
-    controls/QskSkinRenderer.cpp \
-    controls/QskSkinTransition.cpp \
     controls/QskSlider.cpp \
     controls/QskSliderSkinlet.cpp \
     controls/QskStatusIndicator.cpp \
@@ -244,38 +262,34 @@ SOURCES += \
     controls/QskTabButtonSkinlet.cpp \
     controls/QskTabView.cpp \
     controls/QskTabViewSkinlet.cpp \
+    controls/QskTextInput.cpp \
+    controls/QskTextInputSkinlet.cpp \
     controls/QskTextLabel.cpp \
     controls/QskTextLabelSkinlet.cpp \
     controls/QskVariantAnimator.cpp \
     controls/QskWindow.cpp
 
 HEADERS += \
-    skins/material/QskMaterialSkin.h \
-    skins/squiek/QskSquiekSkin.h
-
-SOURCES += \
-    skins/material/QskMaterialSkin.cpp \
-    skins/squiek/QskSquiekSkin.cpp
-
-HEADERS += \
     layouts/QskGridBox.h \
+    layouts/QskGridLayoutEngine.h \
     layouts/QskIndexedLayoutBox.h \
-    layouts/QskLayoutEngine.h \
-    layouts/QskLayout.h \
-    layouts/QskLayoutConstraint.h \
-    layouts/QskLayoutItem.h \
+    layouts/QskLayoutChain.h \
+    layouts/QskLayoutEngine2D.cpp \
+    layouts/QskLayoutHint.h \
     layouts/QskLinearBox.h \
+    layouts/QskLinearLayoutEngine.h \
     layouts/QskStackBoxAnimator.h \
     layouts/QskStackBox.h
 
 SOURCES += \
     layouts/QskGridBox.cpp \
+    layouts/QskGridLayoutEngine.cpp \
     layouts/QskIndexedLayoutBox.cpp \
-    layouts/QskLayout.cpp \
-    layouts/QskLayoutConstraint.cpp \
-    layouts/QskLayoutEngine.cpp \
-    layouts/QskLayoutItem.cpp \
+    layouts/QskLayoutChain.cpp \
+    layouts/QskLayoutEngine2D.cpp \
+    layouts/QskLayoutHint.cpp \
     layouts/QskLinearBox.cpp \
+    layouts/QskLinearLayoutEngine.cpp \
     layouts/QskStackBoxAnimator.cpp \
     layouts/QskStackBox.cpp
 
@@ -285,8 +299,6 @@ HEADERS += \
     dialogs/QskDialogButtonBox.h \
     dialogs/QskDialogSubWindow.h \
     dialogs/QskDialogWindow.h \
-    dialogs/QskInputSubWindow.h \
-    dialogs/QskInputWindow.h \
     dialogs/QskMessageSubWindow.h \
     dialogs/QskMessageWindow.h \
     dialogs/QskSelectionSubWindow.h \
@@ -298,9 +310,30 @@ SOURCES += \
     dialogs/QskDialog.cpp \
     dialogs/QskDialogSubWindow.cpp \
     dialogs/QskDialogWindow.cpp \
-    dialogs/QskInputSubWindow.cpp \
-    dialogs/QskInputWindow.cpp \
     dialogs/QskMessageSubWindow.cpp \
     dialogs/QskMessageWindow.cpp \
     dialogs/QskSelectionSubWindow.cpp \
     dialogs/QskSelectionWindow.cpp
+
+HEADERS += \
+    inputpanel/QskTextPredictor.h \
+    inputpanel/QskInputContext.h \
+    inputpanel/QskInputPanel.h \
+    inputpanel/QskInputPanelBox.h \
+    inputpanel/QskInputPredictionBar.h \
+    inputpanel/QskVirtualKeyboard.h
+
+SOURCES += \
+    inputpanel/QskTextPredictor.cpp \
+    inputpanel/QskInputContext.cpp \
+    inputpanel/QskInputPanel.cpp \
+    inputpanel/QskInputPanelBox.cpp \
+    inputpanel/QskInputPredictionBar.cpp \
+    inputpanel/QskVirtualKeyboard.cpp
+
+target.path    = $${QSK_INSTALL_LIBS}
+INSTALLS       = target
+
+header_files.files = $$HEADERS
+header_files.path = $${QSK_INSTALL_HEADERS}
+INSTALLS += header_files

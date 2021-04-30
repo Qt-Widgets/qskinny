@@ -1,8 +1,4 @@
-include( $${PWD}/../examples.pri )
-
-TARGET = tabview
-
-QT += quick 
+CONFIG += qskexample
 
 SOURCES += \
     main.cpp

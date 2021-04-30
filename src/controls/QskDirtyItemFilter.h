@@ -4,33 +4,31 @@
  *****************************************************************************/
 
 #ifndef QSK_DIRTY_ITEM_FILTER_H
-#define QSK_DIRTY_ITEM_FILTER_H 1
+#define QSK_DIRTY_ITEM_FILTER_H
 
 #include "QskGlobal.h"
 
-#include <QObject>
-#include <QSet>
+#include <qobject.h>
+#include <qset.h>
 
 class QQuickWindow;
 class QQuickItem;
 
-class QSK_EXPORT QskDirtyItemFilter : public QObject
+class QskDirtyItemFilter : public QObject
 {
     using Inherited = QObject;
 
-public:
+  public:
     QskDirtyItemFilter( QObject* parent = nullptr );
-    virtual ~QskDirtyItemFilter();
+    ~QskDirtyItemFilter() override;
 
     void addWindow( QQuickWindow* window );
 
     static void filterDirtyList( QQuickWindow*,
         bool ( *isBlocked )( const QQuickItem* ) );
 
-private:
+  private:
     void beforeSynchronizing( QQuickWindow* );
-    void resetBlockedDirty();
-    void cleanUp( QObject* );
 
     QSet< QObject* > m_windows;
 };

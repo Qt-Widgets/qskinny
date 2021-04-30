@@ -4,681 +4,238 @@
  *****************************************************************************/
 
 #include "QskControl.h"
+#include "QskControlPrivate.h"
+
 #include "QskAspect.h"
-#include "QskSetup.h"
-#include "QskSkinlet.h"
+#include "QskFunctions.h"
 #include "QskEvent.h"
-#include "QskDirtyItemFilter.h"
+#include "QskQuick.h"
+#include "QskSetup.h"
+#include "QskSkin.h"
+#include "QskSkinlet.h"
+#include "QskSkinHintTable.h"
+#include "QskMargins.h"
 
-#include <QLocale>
-#include <QVector>
+#include <qlocale.h>
+#include <qvector.h>
 
-QSK_QT_PRIVATE_BEGIN
-#include <private/qquickitem_p.h>
-#if defined( QT_DEBUG )
-#include <private/qquickpositioners_p.h>
-#endif
-QSK_QT_PRIVATE_END
+QSK_SYSTEM_STATE( QskControl, Disabled, QskAspect::FirstSystemState )
+QSK_SYSTEM_STATE( QskControl, Hovered, QskAspect::LastSystemState >> 1 )
+QSK_SYSTEM_STATE( QskControl, Focused, QskAspect::LastSystemState )
 
-#include <limits>
-#include <unordered_map>
-
-QSK_STATE( QskControl, Disabled, QskAspect::FirstSystemState )
-QSK_STATE( QskControl, Hovered, QskAspect::LastSystemState >> 1 )
-QSK_STATE( QskControl, Focused, QskAspect::LastSystemState )
-
-typedef quint16 controlFlags_t;
-
-void qskResolveLocale( QskControl* );
-
-static void qskSendEventTo( QObject* object, QEvent::Type type )
+static inline void qskSendEventTo( QObject* object, QEvent::Type type )
 {
     QEvent event( type );
     QCoreApplication::sendEvent( object, &event );
 }
 
-static controlFlags_t qskControlFlags()
+QskControl::QskControl( QQuickItem* parent )
+    : QskQuickItem( *( new QskControlPrivate() ), parent )
 {
-    // we are only interested in the first 8 bits
-    return static_cast< controlFlags_t >( qskSetup->controlFlags() );
-}
-
-static void qskFilterWindow( QQuickWindow* window )
-{
-    if ( window == nullptr )
-        return;
-
-    static QskDirtyItemFilter itemFilter;
-    itemFilter.addWindow( window );
-}
-
-namespace
-{
-    /*
-        A helper class to store the released window to be able to
-        put it later into the WindowChange event.
-     */
-    class QskWindowStore
-    {
-    public:
-        QskWindowStore():
-            m_refCount( 0 ),
-            m_window( nullptr )
-        {
-        }
-
-        void setWindow( QQuickWindow* window )
-        {
-            if ( m_window != window )
-            {
-                m_window = window;
-                m_refCount = 0;
-            }
-
-            if ( m_window )
-                m_refCount++;
-        }
-
-        QQuickWindow* window()
-        {
-            QQuickWindow* w = m_window;
-
-            if ( m_window )
-            {
-                if ( --m_refCount == 0 )
-                    m_window = nullptr;
-            }
-
-            return w;
-        }
-
-    private:
-        int m_refCount;
-        QQuickWindow* m_window;
-    };
-}
-
-static QskWindowStore qskReleasedWindowCounter;
-
-class QskControlPrivate : public QQuickItemPrivate
-{
-    Q_DECLARE_PUBLIC(QskControl)
-public:
-    void mirrorChange() override
-    {
-        Q_Q( QskControl );
-        qskSendEventTo( q, QEvent::LayoutDirectionChange );
-    }
-
-#if 0
-    // can we do something useful with overloading those ???
-
-    virtual qreal getImplicitWidth() const override final;
-    virtual qreal getImplicitHeight() const override final;
-    virtual void implicitWidthChanged();
-    virtual void implicitHeightChanged();
-
-    virtual QSGTransformNode *createTransformNode();
-#endif
-
-    bool maybeGesture( QQuickItem* child, QEvent* event )
-    {
-        Q_Q( QskControl );
-
-        switch( event->type() )
-        {
-            case QEvent::MouseButtonPress:
-            {
-                const auto mouseEvent = static_cast< const QMouseEvent* >( event );
-                const QPointF pos = q->mapFromScene( mouseEvent->windowPos() );
-
-                if ( !q->gestureRect().contains( pos ) )
-                    return false;
-
-                break;
-            }
-
-            case QEvent::MouseMove:
-            case QEvent::MouseButtonRelease:
-            case QEvent::MouseButtonDblClick:
-            case QEvent::UngrabMouse:
-            case QEvent::TouchBegin:
-            case QEvent::TouchCancel:
-            case QEvent::TouchUpdate:
-                break;
-
-            default:
-                return false;
-        }
-
-        return q->gestureFilter( child, event );
-    }
-};
-
-static_assert( sizeof( QskControlPrivate ) == sizeof( QQuickItemPrivate ),
-    "QskControlPrivate may not have additional members." );
-
-QskControl::QskControl( QQuickItem* parent ):
-    QskControl( *( new QskControlPrivate() ), parent )
-{
-}
-
-QskControl::QskControl( QQuickItemPrivate& dd, QQuickItem* parent ):
-    Inherited( dd, parent ),
-    m_controlFlags( qskControlFlags() ),
-    m_controlFlagsMask( 0 ),
-    m_explicitLocale( false ),
-    m_autoFillBackground( false ),
-    m_autoLayoutChildren( false ),
-    m_polishOnResize( false ),
-    m_blockedPolish( false ),
-    m_blockedImplicitSize( true ),
-    m_clearPreviousNodes( false ),
-    m_isInitiallyPainted( false )
-{
-    Q_D( QskControl );
-
-    if ( m_controlFlags & QskControl::DeferredLayout )
-    {
-        // In general the geometry of an item should be the job of
-        // the parent - unfortunatly not done by Qt Quick
-        // probably in the spirit of "making things easier".
-
-        // To avoid potentially expensive calculations happening
-        // too often and early QskControl blocks updates of
-        // the implicitSize and any auto resizing of the control
-        // according to it.
-
-        // There should be no strong reason for using concepts
-        // like Positioners, that rely on implicit resizing,
-        // but to make it working: the DeferredLayout flag needs to be disabled.
-
-        d->widthValid = d->heightValid = true;
-    }
-
-    setFlag( QQuickItem::ItemHasContents, true );
-    setActiveFocusOnTab( false );
+    Inherited::setActiveFocusOnTab( false );
 
     if ( parent )
     {
         // inheriting attributes from parent
-        qskResolveLocale( this );
+        QskControlPrivate::resolveLocale( this );
     }
-
-    setupImplicitSizeConnections( true );
-
-    connect( this, &QQuickItem::enabledChanged,
-        [this] { setSkinStateFlag( Disabled, !isEnabled() ); } );
-
-    // using a conventional connection as being automatically
-    // removed by the destructor
-
-    connect( qskSetup, SIGNAL( controlFlagsChanged() ),
-        this, SLOT( updateControlFlags() ) );
-
-    if ( m_controlFlags & QskControl::DeferredUpdate )
-        qskFilterWindow( window() );
 }
 
 QskControl::~QskControl()
 {
-}
-
-const char* QskControl::className() const
-{
-    return metaObject()->className();
-}
-
-void QskControl::setVisible( bool on )
-{
-    // QQuickItem::setVisible is no slot
-    Inherited::setVisible( on );
-}
-
-void QskControl::show()
-{
-    Inherited::setVisible( true );
-}
-
-void QskControl::hide()
-{
-    Inherited::setVisible( false );
-}
-
-void QskControl::setGeometry( qreal x, qreal y, qreal width, qreal height )
-{
-    // QQuickItem does not even offer changing the geometry
-    // in one call - what leads to 2 calls of the updateGeometry
-    // hook. Grmpf ...
-
-    Q_D( QQuickItem );
-
-    d->heightValid = true;
-    d->widthValid = true;
-
-    const QRectF oldRect( d->x, d->y, d->width, d->height );
-
-    int dirtyType = 0;
-
-    if ( d->x != x || d->y != y )
+#if defined( QT_DEBUG )
+    if ( auto w = window() )
     {
-        d->x = x;
-        d->y = y;
+        if( this == w->mouseGrabberItem() )
+        {
+            // to catch suicide situations as a result of mouse clicks
+            qWarning() << "QskControl::~QskControl: probably suicide situation detected, control is the mouse grabber item" << this;
+        }
 
-        dirtyType |= QQuickItemPrivate::Position;
     }
-
-    if ( d->width != width || d->height != height )
-    {
-        d->height = height;
-        d->width = width;
-
-        dirtyType |= QQuickItemPrivate::Size;
-    }
-
-    if ( dirtyType )
-    {
-        if ( dirtyType & QQuickItemPrivate::Position )
-            d->dirty( QQuickItemPrivate::Position );
-
-        if ( dirtyType & QQuickItemPrivate::Size )
-            d->dirty( QQuickItemPrivate::Size );
-
-        geometryChanged( QRectF( d->x, d->y, d->width, d->height ), oldRect );
-    }
-}
-
-QRectF QskControl::geometry() const
-{
-    Q_D( const QQuickItem );
-    return QRectF( d->x, d->y, d->width, d->height );
+#endif
 }
 
 void QskControl::setAutoFillBackground( bool on )
 {
-    if ( on != m_autoFillBackground )
+    Q_D( QskControl );
+    if ( on != d->autoFillBackground )
     {
-        m_autoFillBackground = on;
-
+        d->autoFillBackground = on;
         update();
-        Q_EMIT controlFlagsChanged();
     }
 }
 
 bool QskControl::autoFillBackground() const
 {
-    return m_autoFillBackground;
+    return d_func()->autoFillBackground;
 }
 
 void QskControl::setAutoLayoutChildren( bool on )
 {
-    if ( on != m_autoLayoutChildren )
+    Q_D( QskControl );
+    if ( on != d->autoLayoutChildren )
     {
-        m_autoLayoutChildren = on;
+        d->autoLayoutChildren = on;
         if ( on )
             polish();
-
-        Q_EMIT controlFlagsChanged();
     }
 }
 
 bool QskControl::autoLayoutChildren() const
 {
-    return m_autoLayoutChildren;
+    return d_func()->autoLayoutChildren;
 }
 
-void QskControl::setTransparentForPositioner( bool on )
+void QskControl::setWheelEnabled( bool on )
 {
     Q_D( QskControl );
-    if ( on != d->isTransparentForPositioner() )
+    if ( on != d->isWheelEnabled )
     {
-        d->setTransparentForPositioner( on );
-        Q_EMIT controlFlagsChanged();
+        d->isWheelEnabled = on;
+        Q_EMIT wheelEnabledChanged();
     }
 }
 
-bool QskControl::isTransparentForPositioner() const
+bool QskControl::isWheelEnabled() const
 {
-    Q_D( const QskControl );
-    return d->isTransparentForPositioner();
+    return d_func()->isWheelEnabled;
 }
 
-bool QskControl::isTransparentForPositioner( const QQuickItem* item )
-{
-    if ( item == nullptr )
-        return true;
-
-    return QQuickItemPrivate::get( item )->isTransparentForPositioner();
-}
-
-void QskControl::setPolishOnResize( bool on )
-{
-    if ( on != m_polishOnResize )
-    {
-        m_polishOnResize = on;
-        polish();
-
-        Q_EMIT controlFlagsChanged();
-    }
-}
-
-bool QskControl::polishOnResize() const
-{
-    return m_polishOnResize;
-}
-
-void QskControl::setTabFence( bool on )
+void QskControl::setFocusPolicy( Qt::FocusPolicy policy )
 {
     Q_D( QskControl );
-    if ( on != d->isTabFence )
+    if ( policy != d->focusPolicy )
     {
-        d->isTabFence = on;
-        Q_EMIT controlFlagsChanged();
-    }
-}
+        d->focusPolicy = ( policy & ~Qt::TabFocus );
 
-bool QskControl::isTabFence() const
-{
-    Q_D( const QskControl );
-    return d->isTabFence;
-}
+        const bool tabFocus = policy & Qt::TabFocus;
 
-QskControl::Flags QskControl::controlFlags() const
-{
-    return QskControl::Flags( m_controlFlags );
-}
-
-void QskControl::setControlFlags( Flags flags )
-{
-    // set all bits in the mask
-    m_controlFlagsMask = std::numeric_limits< controlFlags_t >::max();
-    updateControlFlags( flags );
-}
-
-void QskControl::resetControlFlags()
-{
-    // clear all bits in the mask
-    m_controlFlagsMask = 0;
-    updateControlFlags( static_cast< Flags >( qskControlFlags() ) );
-}
-
-void QskControl::setControlFlag( Flag flag, bool on )
-{
-    m_controlFlagsMask |= flag;
-
-    if ( ( m_controlFlags & flag ) != on )
-    {
-        updateControlFlag( flag, on );
-        Q_EMIT controlFlagsChanged();
-    }
-}
-
-void QskControl::resetControlFlag( Flag flag )
-{
-    m_controlFlagsMask &= ~flag;
-
-    const bool on = qskSetup->testControlFlag( static_cast< QskSetup::Flag >( flag ) );
-
-    if ( ( m_controlFlags & flag ) != on )
-    {
-        updateControlFlag( flag, on );
-        Q_EMIT controlFlagsChanged();
-    }
-}
-
-bool QskControl::testControlFlag( Flag flag ) const
-{
-    return m_controlFlags & flag;
-}
-
-void QskControl::updateControlFlags()
-{
-    updateControlFlags( static_cast< Flags >( qskControlFlags() ) );
-}
-
-void QskControl::updateControlFlags( Flags flags )
-{
-    const auto oldFlags = m_controlFlags;
-    const auto newFlags = static_cast< controlFlags_t >( flags );
-
-    if ( oldFlags != newFlags )
-    {
-        for ( uint i = 0; i <= LastFlag; ++i )
+        if ( !tabFocus && window() )
         {
-            const uint flag = ( 1 << i );
-            updateControlFlag( flag, flags & flag );
-        }
-
-        Q_EMIT controlFlagsChanged();
-    }
-}
-
-void QskControl::updateControlFlag( uint flag, bool on )
-{
-    Q_D( QskControl );
-
-    if ( ( flag > std::numeric_limits< controlFlags_t >::max() )
-        || ( bool( m_controlFlags & flag ) == on ) )
-    {
-        return;
-    }
-
-    if ( on )
-        m_controlFlags |= flag;
-    else
-        m_controlFlags &= ~flag;
-
-    switch( flag )
-    {
-        case QskControl::DeferredUpdate:
-        {
-            if ( on )
+            // Removing the activeFocusItem from the focus tab chain is not possible
+            if ( window()->activeFocusItem() == this )
             {
-                qskFilterWindow( window() );
+                if ( auto focusItem = nextItemInFocusChain( true ) )
+                    focusItem->setFocus( true );
             }
-            else
-            {
-                if ( !isVisible() )
-                    update();
-            }
-
-            break;
         }
-        case QskControl::DeferredPolish:
-        {
-            if ( !on && m_blockedPolish )
-                polish();
 
-            break;
-        }
-        case QskControl::DeferredLayout:
-        {
-            if ( !on )
-            {
-                // Update the implicitSize and rebind the size to it.
-                // Having set the size explicitly gets lost.
+        Inherited::setActiveFocusOnTab( tabFocus );
 
-                d->widthValid = d->heightValid = false;
-                updateImplicitSize();
-            }
-
-            break;
-        }
-        case QskControl::CleanupOnVisibility:
-        {
-            if ( on && !isVisible() )
-                cleanupNodes();
-
-            break;
-        }
-        case QskControl::DebugForceBackground:
-        {
-            // no need to mark it dirty
-            update();
-            break;
-        }
-        default:
-            break;
+        Q_EMIT focusPolicyChanged();
     }
 }
 
-void QskControl::setupImplicitSizeConnections( bool on )
+Qt::FocusPolicy QskControl::focusPolicy() const
 {
-    // in case of someone manipulating the implicit size from
-    // outside, we might need to adjust some layouts
+    uint policy = d_func()->focusPolicy;
+    if ( Inherited::activeFocusOnTab() )
+        policy |= Qt::TabFocus;
 
-    if ( on )
-    {
-        QObject::connect( this, &QskControl::implicitWidthChanged,
-            this, &QskControl::onImplicitSizeChanged );
-
-        QObject::connect( this, &QskControl::implicitHeightChanged,
-            this, &QskControl::onImplicitSizeChanged );
-    }
-    else
-    {
-        QObject::disconnect( this, &QskControl::implicitWidthChanged,
-            this, &QskControl::onImplicitSizeChanged );
-
-        QObject::disconnect( this, &QskControl::implicitHeightChanged,
-            this, &QskControl::onImplicitSizeChanged );
-    }
+    return static_cast< Qt::FocusPolicy >( policy );
 }
 
 void QskControl::setBackgroundColor( const QColor& color )
 {
-    setColor( QskAspect::Control | QskAspect::Background, color );
     setAutoFillBackground( true );
+    setBackground( QskGradient( color ) );
+}
+
+void QskControl::setBackground( const QskGradient& gradient )
+{
+    if ( setGradientHint( QskAspect::Control, gradient ) )
+        Q_EMIT backgroundChanged();
+}
+
+void QskControl::resetBackground()
+{
+    if ( resetColor( QskAspect::Control ) )
+        Q_EMIT backgroundChanged();
+}
+
+QskGradient QskControl::background() const
+{
+    return gradientHint( QskAspect::Control );
 }
 
 void QskControl::setMargins( qreal margin )
 {
-    setMargins( QMarginsF( margin, margin, margin, margin ) );
+    setMargins( QskMargins( margin ) );
 }
 
 void QskControl::setMargins( const QMarginsF& margins )
 {
-    using namespace QskAspect;
+    const auto m = QskMargins().expandedTo( margins );
 
-    const Subcontrol subControl = effectiveSubcontrol( QskAspect::Control );
-
-    const QMarginsF m(
-        qMax( qreal( margins.left() ), qreal( 0.0 ) ),
-        qMax( qreal( margins.top() ), qreal( 0.0 ) ),
-        qMax( qreal( margins.right() ), qreal( 0.0 ) ),
-        qMax( qreal( margins.bottom() ), qreal( 0.0 ) ) );
-
-    if ( m != this->margins() )
+    if ( setMarginHint( QskAspect::Control, m ) )
     {
-        Aspect aspect = subControl | Margin;
-
-        setMetric( aspect | LeftEdge, m.left() );
-        setMetric( aspect | TopEdge, m.top() );
-        setMetric( aspect | RightEdge, m.right() );
-        setMetric( aspect | BottomEdge, m.bottom() );
-
-        resetImplicitSize();
-
-        if ( m_polishOnResize || m_autoLayoutChildren )
-            polish();
-
         qskSendEventTo( this, QEvent::ContentsRectChange );
+        Q_EMIT marginsChanged( m );
     }
 }
 
 void QskControl::resetMargins()
 {
-    setMargins( QMarginsF() );
+    if ( resetMarginHint( QskAspect::Control ) )
+    {
+        qskSendEventTo( this, QEvent::ContentsRectChange );
+        Q_EMIT marginsChanged( margins() );
+    }
 }
 
 QMarginsF QskControl::margins() const
 {
-    return edgeMetrics( QskAspect::Control, QskAspect::Margin );
+    return marginHint( QskAspect::Control );
 }
 
 QRectF QskControl::contentsRect() const
 {
-    const QRectF r = boundingRect();
-
-    const auto m = margins();
-    qreal left = r.left() + m.left();
-    qreal top = r.top() + m.top();
-    qreal right = r.right() - m.right();
-    qreal bottom = r.bottom() - m.bottom();
-
-    if ( left > r.right() )
-        left = r.right();
-
-    if ( top > r.bottom() )
-        top = r.bottom();
-
-    if ( right < left )
-        right = left;
-
-    if ( bottom < top )
-        bottom = top;
-
-    return QRectF( QPointF( left, top ), QPointF( right, bottom ) );
+    return qskValidOrEmptyInnerRect( rect(), margins() );
 }
 
-bool QskControl::layoutMirroring() const
+QRectF QskControl::subControlRect( QskAspect::Subcontrol subControl ) const
 {
-    Q_D( const QskControl );
-    return d->effectiveLayoutMirror;
+    return subControlRect( contentsRect(), subControl );
 }
 
-void QskControl::setLayoutMirroring( bool on, bool recursive )
+QRectF QskControl::subControlRect(
+    const QSizeF& size, QskAspect::Subcontrol subControl ) const
 {
-    // Again we have to deal with an existing API made for QML,
-    // that is weired for C++: LayoutMirroring/QQuickLayoutMirroringAttached
-    // Internally it is managed by 5(!) different flags - condolences
-    // to the poor guy who has been sentenced to maintain this.
+    QRectF rect( 0.0, 0.0, size.width(), size.height() );
+    rect = qskValidOrEmptyInnerRect( rect, margins() );
 
-    // Anyway, the code below might achieve the desired behavior without
-    // breaking the QML path.
-
-    Q_D( QskControl );
-
-    if ( recursive != d->inheritMirrorFromItem)
-    {
-        d->inheritMirrorFromItem = recursive;
-        d->resolveLayoutMirror();
-    }
-
-    d->isMirrorImplicit = false;
-
-    if ( on != d->effectiveLayoutMirror )
-    {
-        d->setLayoutMirror( on );
-        if ( recursive )
-            d->resolveLayoutMirror();
-    }
+    return subControlRect( rect, subControl );
 }
 
-void QskControl::resetLayoutMirroring()
+QRectF QskControl::subControlContentsRect( QskAspect::Subcontrol subControl ) const
 {
-    Q_D( QskControl );
+    return subControlContentsRect( contentsRect(), subControl );
+}
 
-    if ( d && !d->isMirrorImplicit)
-    {
-        d->isMirrorImplicit = true;
-        //d->inheritMirrorFromItem = false;
-        d->resolveLayoutMirror();
-    }
+QRectF QskControl::subControlContentsRect(
+    const QSizeF& size, QskAspect::Subcontrol subControl ) const
+{
+    QRectF rect( 0.0, 0.0, size.width(), size.height() );
+    rect = qskValidOrEmptyInnerRect( rect, margins() );
+
+    return subControlContentsRect( rect, subControl );
 }
 
 QLocale QskControl::locale() const
 {
-    return m_locale;
+    return d_func()->locale;
 }
 
 void QskControl::setLocale( const QLocale& locale )
 {
-    m_explicitLocale = true;
+    Q_D( QskControl );
 
-    if ( m_locale != locale )
+    d->explicitLocale = true;
+
+    if ( d->locale != locale )
     {
-        m_locale = locale;
+        d->locale = locale;
         qskSendEventTo( this, QEvent::LocaleChange );
         qskSetup->inheritLocale( this, locale );
     }
@@ -686,97 +243,457 @@ void QskControl::setLocale( const QLocale& locale )
 
 void QskControl::resetLocale()
 {
-    if ( m_explicitLocale )
+    Q_D( QskControl );
+
+    if ( d->explicitLocale )
     {
-        m_explicitLocale = false;
-        qskResolveLocale( this );
+        d->explicitLocale = false;
+        QskControlPrivate::resolveLocale( this );
     }
 }
 
-// not static as being called from QskSetup.cpp
-bool qskInheritLocale( QskControl* control, const QLocale& locale )
+void QskControl::initSizePolicy(
+    QskSizePolicy::Policy horizontalPolicy,
+    QskSizePolicy::Policy verticalPolicy )
 {
-    if ( control->m_explicitLocale || control->m_locale == locale )
-        return false;
+    Q_D( QskControl );
 
-    control->m_locale = locale;
-    qskSendEventTo( control, QEvent::LocaleChange );
+    /*
+       In constructors of derived classes you don't need
+       to propagate changes by layoutConstraintChanged.
+       Sometimes it is even worse as the parent might not be
+       even prepared to handle the LayouRequest event.
+     */
 
-    return true;
-}
+    d->sizePolicy.setHorizontalPolicy( horizontalPolicy );
+    d->sizePolicy.setVerticalPolicy( verticalPolicy );
 
-void qskResolveLocale( QskControl* control )
-{
-    const QLocale locale = qskSetup->inheritedLocale( control );
-
-    if ( control->m_locale != locale )
+    if ( horizontalPolicy == QskSizePolicy::Constrained
+        && verticalPolicy == QskSizePolicy::Constrained )
     {
-        control->m_locale = locale;
-        qskSendEventTo( control, QEvent::LocaleChange );
-
-        qskSetup->inheritLocale( control, locale );
+        qWarning( "QskControl::initSizePolicy: conflicting constraints" );
     }
 }
 
-QSizeF QskControl::effectiveConstraint( Qt::SizeHint whichHint ) const
+void QskControl::setSizePolicy( QskSizePolicy policy )
+{
+    Q_D( QskControl );
+
+    if ( policy != d->sizePolicy )
+    {
+        d->sizePolicy = policy;
+        d->layoutConstraintChanged();
+
+        if ( policy.policy( Qt::Horizontal ) == QskSizePolicy::Constrained
+            && policy.policy( Qt::Vertical ) == QskSizePolicy::Constrained )
+        {
+            qWarning( "QskControl::setSizePolicy: conflicting constraints" );
+        }
+    }
+}
+
+void QskControl::setSizePolicy(
+    QskSizePolicy::Policy horizontalPolicy,
+    QskSizePolicy::Policy verticalPolicy )
+{
+    setSizePolicy( QskSizePolicy( horizontalPolicy, verticalPolicy ) );
+}
+
+void QskControl::setSizePolicy(
+    Qt::Orientation orientation, QskSizePolicy::Policy policy )
+{
+    Q_D( QskControl );
+
+    if ( d->sizePolicy.policy( orientation ) != policy )
+    {
+        d->sizePolicy.setPolicy( orientation, policy );
+        d->layoutConstraintChanged();
+    }
+}
+
+QskSizePolicy QskControl::sizePolicy() const
+{
+    return d_func()->sizePolicy;
+}
+
+QskSizePolicy::Policy QskControl::sizePolicy( Qt::Orientation orientation ) const
+{
+    return d_func()->sizePolicy.policy( orientation );
+}
+
+/*
+    Layout attributes belong more to the layout code, than
+    being parameters of the control. So storing them here is kind of a
+    design flaw ( similar to QWidget/QSizePolicy ).
+    But this way we don't need to add the attributes to all type of
+    layout engines + we can make use of them when doing layouts
+    manually ( f.e autoLayoutChildren ).
+ */
+void QskControl::setLayoutAlignmentHint( Qt::Alignment alignment )
+{
+    Q_D( QskControl );
+
+    if ( layoutAlignmentHint() != alignment )
+    {
+        d->layoutAlignmentHint = alignment;
+        d->layoutConstraintChanged();
+    }
+}
+
+Qt::Alignment QskControl::layoutAlignmentHint() const
+{
+    return static_cast< Qt::Alignment >( d_func()->layoutAlignmentHint );
+}
+
+void QskControl::setLayoutHint( LayoutHint flag, bool on )
+{
+    Q_D( QskControl );
+    if ( ( d->layoutHints & flag ) != on )
+    {
+        if ( on )
+            d->layoutHints |= flag;
+        else
+            d->layoutHints &= ~flag;
+
+        d->layoutConstraintChanged();
+    }
+}
+
+bool QskControl::testLayoutHint( LayoutHint hint ) const
+{
+    return d_func()->layoutHints & hint;
+}
+
+void QskControl::setLayoutHints( LayoutHints hints )
+{
+    Q_D( QskControl );
+    if ( hints != layoutHints() )
+    {
+        d->layoutHints = hints;
+        d->layoutConstraintChanged();
+    }
+}
+
+QskControl::LayoutHints QskControl::layoutHints() const
+{
+    return static_cast< LayoutHints >( d_func()->layoutHints );
+}
+
+bool QskControl::isVisibleToLayout() const
+{
+    return !isTransparentForPositioner()
+        && ( isVisibleToParent() || ( layoutHints() & RetainSizeWhenHidden ) );
+}
+
+void QskControl::setPreferredSize( const QSizeF& size )
+{
+    setExplicitSizeHint( Qt::PreferredSize, size );
+}
+
+void QskControl::setPreferredSize( qreal width, qreal height )
+{
+    setExplicitSizeHint( Qt::PreferredSize, QSizeF( width, height ) );
+}
+
+void QskControl::setPreferredWidth( qreal width )
+{
+    const qreal height = explicitSizeHint( Qt::PreferredSize ).height();
+    setExplicitSizeHint( Qt::PreferredSize, QSizeF( width, height ) );
+}
+
+void QskControl::setPreferredHeight( qreal height )
+{
+    const qreal width = explicitSizeHint( Qt::PreferredSize ).width();
+    setExplicitSizeHint( Qt::PreferredSize, QSizeF( width, height ) );
+}
+
+void QskControl::setMinimumSize( const QSizeF& size )
+{
+    setExplicitSizeHint( Qt::MinimumSize, size );
+}
+
+void QskControl::setMinimumSize( qreal width, qreal height )
+{
+    setExplicitSizeHint( Qt::MinimumSize, QSizeF( width, height ) );
+}
+
+void QskControl::setMinimumWidth( qreal width )
+{
+    const qreal height = explicitSizeHint( Qt::MinimumSize ).height();
+    setExplicitSizeHint( Qt::MinimumSize, QSizeF( width, height ) );
+}
+
+void QskControl::setMinimumHeight( qreal height )
+{
+    const qreal width = explicitSizeHint( Qt::MinimumSize ).width();
+    setExplicitSizeHint( Qt::MinimumSize, QSizeF( width, height ) );
+}
+
+void QskControl::setMaximumSize( const QSizeF& size )
+{
+    setExplicitSizeHint( Qt::MaximumSize, size );
+}
+
+void QskControl::setMaximumSize( qreal width, qreal height )
+{
+    setExplicitSizeHint( Qt::MaximumSize, QSizeF( width, height ) );
+}
+
+void QskControl::setMaximumWidth( qreal width )
+{
+    const qreal height = explicitSizeHint( Qt::MaximumSize ).height();
+    setExplicitSizeHint( Qt::MaximumSize, QSizeF( width, height ) );
+}
+
+void QskControl::setMaximumHeight( qreal height )
+{
+    const qreal width = explicitSizeHint( Qt::MaximumSize ).width();
+    setExplicitSizeHint( Qt::MaximumSize, QSizeF( width, height ) );
+}
+
+void QskControl::setFixedSize( const QSizeF& size )
+{
+    const QSizeF newSize = size.expandedTo( QSizeF( 0, 0 ) );
+
+    const QskSizePolicy policy( QskSizePolicy::Fixed, QskSizePolicy::Fixed );
+
+    Q_D( QskControl );
+
+    if ( policy != d->sizePolicy ||
+        d->explicitSizeHint( Qt::PreferredSize ) != newSize )
+    {
+        d->sizePolicy = policy;
+        d->setExplicitSizeHint( Qt::PreferredSize, newSize );
+
+        d->layoutConstraintChanged();
+    }
+}
+
+void QskControl::setFixedSize( qreal width, qreal height )
+{
+    setFixedSize( QSizeF( width, height ) );
+}
+
+void QskControl::setFixedWidth( qreal width )
+{
+    if ( width < 0 )
+        width = 0;
+
+    Q_D( QskControl );
+
+    auto size = d->explicitSizeHint( Qt::PreferredSize );
+
+    if ( ( d->sizePolicy.horizontalPolicy() != QskSizePolicy::Fixed ) ||
+        ( size.width() != width ) )
+    {
+        size.setWidth( width );
+
+        d->sizePolicy.setHorizontalPolicy( QskSizePolicy::Fixed );
+        d->setExplicitSizeHint( Qt::PreferredSize, size );
+
+        d->layoutConstraintChanged();
+    }
+}
+
+void QskControl::setFixedHeight( qreal height )
+{
+    if ( height < 0 )
+        height = 0;
+
+    Q_D( QskControl );
+
+    auto size = d->explicitSizeHint( Qt::PreferredSize );
+
+    if ( ( d->sizePolicy.verticalPolicy() != QskSizePolicy::Fixed ) ||
+        ( size.height() != height ) )
+    {
+        size.setHeight( height );
+
+        d->sizePolicy.setVerticalPolicy( QskSizePolicy::Fixed );
+        d->setExplicitSizeHint( Qt::PreferredSize, size );
+
+        d->layoutConstraintChanged();
+    }
+}
+
+void QskControl::resetExplicitSizeHint( Qt::SizeHint whichHint )
+{
+    if ( whichHint >= Qt::MinimumSize && whichHint <= Qt::MaximumSize )
+    {
+        Q_D( QskControl );
+
+        const auto oldHint = d->explicitSizeHint( whichHint );
+        d->resetExplicitSizeHint( whichHint );
+
+        if ( oldHint != d->explicitSizeHint( whichHint ) )
+            d->layoutConstraintChanged();
+    }
+}
+
+void QskControl::setExplicitSizeHint( Qt::SizeHint whichHint, const QSizeF& size )
+{
+    if ( whichHint >= Qt::MinimumSize && whichHint <= Qt::MaximumSize )
+    {
+        const QSizeF newSize( ( size.width() < 0 ) ? -1.0 : size.width(),
+            ( size.height() < 0 ) ? -1.0 : size.height() );
+
+        Q_D( QskControl );
+
+        if ( newSize != d->explicitSizeHint( whichHint ) )
+        {
+            d->setExplicitSizeHint( whichHint, newSize );
+            d->layoutConstraintChanged();
+        }
+    }
+}
+
+void QskControl::setExplicitSizeHint(
+    Qt::SizeHint whichHint, qreal width, qreal height )
+{
+    setExplicitSizeHint( whichHint, QSizeF( width, height ) );
+}
+
+QSizeF QskControl::explicitSizeHint( Qt::SizeHint whichHint ) const
 {
     if ( whichHint < Qt::MinimumSize || whichHint > Qt::MaximumSize )
-        return QSizeF( 0, 0 );
+        return QSizeF();
 
-    QSizeF constraint = QskResizable::sizeHint( whichHint );
-    if ( whichHint == Qt::PreferredSize && !constraint.isValid() )
-    {
-        // in most cases we don't have a preferred width or height
-        // and fall back to the implicit size.
-
-        if ( m_blockedImplicitSize )
-        {
-            QskControl* that = const_cast< QskControl* >( this );
-            that->updateImplicitSize();
-        }
-
-        if ( constraint.width() < 0 )
-            constraint.setWidth( implicitWidth() );
-
-        if ( constraint.height() < 0 )
-            constraint.setHeight( implicitHeight() );
-    }
-
-    return constraint;
+    return d_func()->explicitSizeHint( whichHint );
 }
 
-void QskControl::resetImplicitSize()
+QSizeF QskControl::implicitSizeHint(
+    Qt::SizeHint whichHint, const QSizeF& constraint ) const
 {
-    if ( m_controlFlags & QskControl::DeferredLayout )
+    if ( whichHint < Qt::MinimumSize || whichHint > Qt::MaximumSize )
+        return QSizeF();
+
+    if ( constraint.isValid() )
     {
-        m_blockedImplicitSize = true;
-        layoutConstraintChanged();
+        // having constraints in both directions does not make sense
+        return constraint;
+    }
+
+    QSizeF hint;
+
+    if ( whichHint == Qt::PreferredSize
+        && constraint.width() < 0.0 && constraint.height() < 0.0 )
+    {
+        // this one might be cached
+        hint = implicitSize();
     }
     else
     {
-        const QSizeF sz = implicitSize();
-
-        updateImplicitSize();
-
-        if ( sz != implicitSize() )
-            onImplicitSizeChanged();
+        hint = d_func()->implicitSizeHint( whichHint, constraint );
     }
+
+    return hint;
+}
+
+QSizeF QskControl::effectiveSizeHint(
+    Qt::SizeHint which, const QSizeF& constraint ) const
+{
+    if ( which < Qt::MinimumSize || which > Qt::MaximumSize )
+        return QSizeF( 0, 0 );
+
+    if ( constraint.isValid() )
+        return constraint;
+
+    const bool isConstrained =
+        constraint.width() >= 0 || constraint.height() >= 0;
+
+    Q_D( const QskControl );
+
+    d->blockLayoutRequestEvents = false;
+
+    QSizeF hint;
+
+    /*
+        The explicit size has always precedence over the implicit size,
+        and will kill the effect of the constraint
+     */
+
+    hint = d->explicitSizeHint( which );
+
+    if ( !hint.isValid() )
+    {
+        const auto implicitHint = implicitSizeHint( which, constraint );
+
+        if ( hint.width() < 0 )
+            hint.setWidth( implicitHint.width() );
+
+        if ( hint.height() < 0 )
+            hint.setHeight( implicitHint.height() );
+    }
+
+    if ( !isConstrained && ( hint.width() >= 0 || hint.height() >= 0 ) )
+    {
+        /*
+            We normalize the unconstrained hints by the explicit hints, so that
+            we always have: minimum <= preferred <= maximum.
+         */
+
+        if ( which == Qt::MaximumSize )
+        {
+            const auto minimumHint = d->explicitSizeHint( Qt::MinimumSize );
+
+            if ( hint.width() >= 0 )
+                hint.rwidth() = qMax( hint.width(), minimumHint.width() );
+
+            if ( hint.height() >= 0 )
+                hint.rheight() = qMax( hint.height(), minimumHint.height() );
+        }
+        else if ( which == Qt::PreferredSize )
+        {
+            const auto minimumHint = d->explicitSizeHint( Qt::MinimumSize );
+            const auto maximumHint = d->explicitSizeHint( Qt::MaximumSize );
+
+            if ( hint.width() >= 0 )
+            {
+                if ( maximumHint.width() >= 0 )
+                    hint.rwidth() = qMin( hint.width(), maximumHint.width() );
+
+                hint.rwidth() = qMax( hint.width(), minimumHint.width() );
+            }
+
+            if ( hint.height() >= 0 )
+            {
+                if ( maximumHint.height() >= 0 )
+                    hint.rheight() = qMin( hint.height(), maximumHint.height() );
+
+                hint.rheight() = qMax( hint.height(), minimumHint.height() );
+            }
+        }
+    }
+
+    return hint;
+}
+
+qreal QskControl::heightForWidth( qreal width ) const
+{
+    const auto hint = effectiveSizeHint(
+        Qt::PreferredSize, QSizeF( width, -1.0 ) );
+
+    return hint.height();
+}
+
+qreal QskControl::widthForHeight( qreal height ) const
+{
+    const auto hint = effectiveSizeHint(
+        Qt::PreferredSize, QSizeF( -1.0, height ) );
+
+    return hint.width();
+}
+
+QSizeF QskControl::sizeConstraint(
+    Qt::SizeHint which, const QSizeF& constraint ) const
+{
+    return qskSizeConstraint( this, which, constraint );
 }
 
 bool QskControl::event( QEvent* event )
 {
-    const int eventType = event->type();
-
-    switch( eventType )
+    switch ( static_cast< int >( event->type() ) )
     {
-#if 0
-        case QEvent::PolishRequest:
-        {
-            d->polishScheduled = false;
-            updatePolish();
-            break;
-        }
-#endif
         case QEvent::EnabledChange:
         {
             setSkinStateFlag( Disabled, !isEnabled() );
@@ -787,72 +704,113 @@ bool QskControl::event( QEvent* event )
             Q_EMIT localeChanged( locale() );
             break;
         }
-        case QEvent::LayoutRequest:
+        case QEvent::ContentsRectChange:
         {
-            if ( m_autoLayoutChildren )
-                resetImplicitSize();
+            resetImplicitSize();
+            if ( d_func()->autoLayoutChildren )
+                polish();
 
             break;
         }
-    }
+        case QEvent::LayoutRequest:
+        {
+            if ( d_func()->autoLayoutChildren )
+            {
+                resetImplicitSize();
+                polish();
+            }
 
-    switch( eventType )
-    {
-        case QEvent::EnabledChange:
-        case QEvent::FontChange:
-        case QEvent::PaletteChange:
-        case QEvent::LocaleChange:
-        case QEvent::ReadOnlyChange:
-        case QEvent::ParentChange:
+            break;
+        }
         case QEvent::StyleChange:
-        case QEvent::ContentsRectChange:
         {
-            changeEvent( event );
-            return true;
-        }
-        case QskEvent::GeometryChange:
-        {
-            geometryChangeEvent( static_cast< QskGeometryChangeEvent* >( event ) );
-            return true;
-        }
-        case QskEvent::WindowChange:
-        {
-            windowChangeEvent( static_cast< QskWindowChangeEvent* >( event ) );
-            return true;
+            // The skin has changed
+
+            if ( skinlet() == nullptr )
+            {
+                /*
+                    When we don't have a local skinlet, the skinlet
+                    from the previous skin might be cached.
+                 */
+
+                setSkinlet( nullptr );
+            }
+
+            break;
         }
         case QskEvent::Gesture:
         {
             gestureEvent( static_cast< QskGestureEvent* >( event ) );
             return true;
         }
-        default:
-        {
-            if ( d_func()->maybeGesture( this, event ) )
-                return true;
-        }
     }
+
+    if ( d_func()->maybeGesture( this, event ) )
+        return true;
 
     return Inherited::event( event );
 }
 
 bool QskControl::childMouseEventFilter( QQuickItem* item, QEvent* event )
 {
+#if QT_VERSION < QT_VERSION_CHECK( 5, 10, 0 )
+
+    if ( event->type() == QEvent::MouseButtonPress )
+    {
+        auto me = static_cast< QMouseEvent* >( event );
+
+        if ( me->source() == Qt::MouseEventSynthesizedByQt )
+        {
+            /*
+                Unhandled touch events result in creating synthetic
+                mouse events. For all versions < 5.10 those events are
+                passed through childMouseEventFilter without doing the
+                extra checks, that are done for real mouse events.
+                Furthermore the coordinates are relative
+                to this - not to item.
+
+                To avoid having a different behavior between using
+                mouse and touch, we do those checks here.
+             */
+
+            auto itm = item;
+            auto pos = item->mapFromScene( me->windowPos() );
+
+            for ( itm = item; itm != this; itm = itm->parentItem() )
+            {
+                if ( itm->acceptedMouseButtons() & me->button() )
+                {
+                    if ( itm->contains( pos ) )
+                        break;
+                }
+
+                pos += QPointF( itm->x(), itm->y() );
+            }
+
+            if ( itm != item )
+            {
+                if ( itm == this )
+                    return false;
+
+                QScopedPointer< QMouseEvent > clonedEvent(
+                    QQuickWindowPrivate::cloneMouseEvent( me, &pos ) );
+
+                return d_func()->maybeGesture( itm, clonedEvent.data() );
+            }
+        }
+    }
+
+#endif
+
     return d_func()->maybeGesture( item, event );
 }
 
-bool QskControl::gestureFilter( QQuickItem* item, QEvent* event )
+bool QskControl::gestureFilter( QQuickItem*, QEvent* )
 {
-    Q_UNUSED( item )
-    Q_UNUSED( event )
-
     return false;
 }
 
-void QskControl::windowChangeEvent( QskWindowChangeEvent* )
-{
-}
-
-void QskControl::geometryChangeEvent( QskGeometryChangeEvent* )
+void QskControl::gestureEvent( QskGestureEvent* )
 {
 }
 
@@ -868,279 +826,93 @@ void QskControl::hoverLeaveEvent( QHoverEvent* event )
     setSkinStateFlag( Hovered, false );
 }
 
-void QskControl::changeEvent( QEvent* event )
-{
-    if ( event->type() == QEvent::StyleChange )
-    {
-        /*
-            the skin has changed and we might have totally
-            different skinlets, that can't deal with nodes
-            created from other skinlets
-         */
-        m_clearPreviousNodes = true;
-
-        resetImplicitSize();
-        polish();
-        update();
-    }
-}
-
-void QskControl::gestureEvent( QskGestureEvent* )
-{
-}
-
-void QskControl::classBegin()
-{
-    Inherited::classBegin();
-}
-
-void QskControl::componentComplete()
-{
-#if defined( QT_DEBUG )
-    if ( qobject_cast< const QQuickBasePositioner* >( parent() ) )
-    {
-        if ( m_controlFlags & QskControl::DeferredLayout )
-        {
-            qWarning( "QskControl in DeferredLayout mode under control of a positioner" );
-        }
-    }
-#endif
-    Inherited::componentComplete();
-}
-
-void QskControl::releaseResources()
-{
-    Inherited::releaseResources();
-
-    // QQuickItem::derefWindow runs over the children between
-    // calling releaseResources and itemChange. So we need to have
-    // a reference count to know, when we have processed all
-    // sequences to be able to provide the correct "oldWindow"
-    // in the WindowChange event.
-
-    qskReleasedWindowCounter.setWindow( window() );
-}
-
-const QSGNode* QskControl::itemNode( const QQuickItem* item )
-{
-    if ( item == nullptr )
-        return nullptr;
-
-    return QQuickItemPrivate::get( item )->itemNodeInstance;
-}
-
-const QSGNode* QskControl::paintNode( const QQuickItem* item )
-{
-    if ( item == nullptr )
-        return nullptr;
-
-    return QQuickItemPrivate::get( item )->paintNode;
-}
-
 void QskControl::itemChange( QQuickItem::ItemChange change,
     const QQuickItem::ItemChangeData& value )
 {
-    Inherited::itemChange( change, value );
-
-    switch( change )
+    switch ( static_cast< int >( change ) )
     {
         case QQuickItem::ItemParentHasChanged:
         {
-            if ( !m_explicitLocale )
-                qskResolveLocale( this );
-
-            // not necessarily correct, when parent != parentItem ???
-            qskSendEventTo( this, QEvent::ParentChange );
-
-            break;
-        }
-        case QQuickItem::ItemVisibleHasChanged:
-        {
-            if ( value.boolValue )
+            if ( value.item )
             {
-                if ( m_blockedPolish )
-                    polish();
-
-                if ( m_controlFlags & QskControl::DeferredUpdate )
-                {
-                    Q_D( QskControl );
-                    if ( d->dirtyAttributes )
-                        update();
-                }
-            }
-            else
-            {
-                if ( m_controlFlags & QskControl::CleanupOnVisibility )
-                    cleanupNodes();
-
-                m_isInitiallyPainted = false;
+                if ( !d_func()->explicitLocale )
+                    QskControlPrivate::resolveLocale( this );
             }
 
 #if 1
-            // Layout code might consider the visiblility of the children
-            // and therefore needs to be updated. Posting a statement about
-            // changed layout constraints has this effect, but is not correct.
-            // The right way to go would be to create show/hide events and to
-            // handle them, where visibility of the children matters.
-            // TODO ...
-
-            layoutConstraintChanged();
+            // not necessarily correct, when parent != parentItem ???
+            qskSendEventTo( this, QEvent::ParentChange );
 #endif
+
             break;
         }
-        case QQuickItem::ItemSceneChange:
+        case QQuickItem::ItemChildAddedChange:
         {
-            if ( value.window )
-            {
-                if ( m_controlFlags & QskControl::DeferredUpdate )
-                    qskFilterWindow( value.window );
-            }
-
-            QskWindowChangeEvent event(
-                qskReleasedWindowCounter.window(), value.window );
-            QCoreApplication::sendEvent( this, &event );
+            if ( autoLayoutChildren() && !qskIsTransparentForPositioner( value.item ) )
+                polish();
 
             break;
         }
         case QQuickItem::ItemActiveFocusHasChanged:
         {
-            // creating focus events ???
             setSkinStateFlag( Focused, hasActiveFocus() );
             break;
         }
-        default:
-        {
-            break;
-        }
     }
+
+    Inherited::itemChange( change, value );
 }
 
-void QskControl::geometryChanged(
+void QskControl::geometryChange(
     const QRectF& newGeometry, const QRectF& oldGeometry )
 {
-    Inherited::geometryChanged( newGeometry, oldGeometry );
-
-    if ( newGeometry.size() != oldGeometry.size() )
+    if ( d_func()->autoLayoutChildren )
     {
-        if ( m_polishOnResize || m_autoLayoutChildren )
+        if ( newGeometry.size() != oldGeometry.size() )
             polish();
     }
 
-    QskGeometryChangeEvent event( newGeometry, oldGeometry );
-    QCoreApplication::sendEvent( this, &event );
+    Inherited::geometryChange( newGeometry, oldGeometry );
 }
 
-void QskControl::layoutConstraintChanged()
+void QskControl::updateItemPolish()
 {
-    QQuickItem* item = parentItem();
-    if ( item )
-        qskSendEventTo( item, QEvent::LayoutRequest );
-}
+    updateResources(); // an extra dirty bit for this ???
 
-void QskControl::updatePolish()
-{
-    if ( m_controlFlags & QskControl::DeferredPolish )
+    if ( width() >= 0.0 || height() >= 0.0 )
     {
-        if ( !isVisible() )
+        if ( d_func()->autoLayoutChildren && !maybeUnresized() )
         {
-            m_blockedPolish = true;
-            return;
-        }
-    }
+            const auto rect = layoutRect();
 
-    m_blockedPolish = false;
-
-    if ( m_autoLayoutChildren )
-    {
-        const QRectF rect = layoutRect();
-
-        for ( auto child : childItems() )
-        {
-            if ( !QQuickItemPrivate::get( child )->isTransparentForPositioner() )
+            const auto children = childItems();
+            for ( auto child : children )
             {
-                child->setPosition( rect.topLeft() );
-                child->setSize( rect.size() );
+                /*
+                    We don't want to resize invisible children, but then
+                    we would need to set up connections to know when a child
+                    becomes visible. So we don't use qskIsVisibleToLayout here.
+                    And what about using QskControl::LayoutOutWhenHidden ?
+                 */
+                if ( !qskIsTransparentForPositioner( child ) )
+                {
+                    const auto r = qskConstrainedItemRect( child, rect );
+                    qskSetItemGeometry( child, r );
+                }
             }
         }
-    }
 
-    updateLayout();
+        updateLayout();
+    }
 }
 
-QSGNode* QskControl::updatePaintNode( QSGNode* node, UpdatePaintNodeData* data )
+QSGNode* QskControl::updateItemPaintNode( QSGNode* node )
 {
-    Q_UNUSED( data );
-    Q_ASSERT( isVisible() || !( m_controlFlags & QskControl::DeferredUpdate ) );
-
-    if ( !m_isInitiallyPainted )
-        m_isInitiallyPainted = true;
-
-    if ( m_clearPreviousNodes )
-    {
-        delete node;
-        node = nullptr;
-
-        m_clearPreviousNodes = false;
-    }
-
     if ( node == nullptr )
         node = new QSGNode;
 
     updateNode( node );
     return node;
-}
-
-void QskControl::cleanupNodes()
-{
-    Q_D( QskControl );
-    if ( d->itemNodeInstance == nullptr )
-        return;
-
-    // setting the dirty flags, so that nodes will be recreated
-    // the next time we participate in a scene graph update
-
-    if ( !d->itemNodeInstance->matrix().isIdentity() )
-        d->dirtyAttributes |= QQuickItemPrivate::Position;
-
-    if ( d->extra.isAllocated() )
-    {
-        if ( d->extra->clipNode )
-            d->dirtyAttributes |= QQuickItemPrivate::Clip;
-
-        if ( d->extra->opacityNode )
-            d->dirtyAttributes |= QQuickItemPrivate::OpacityValue;
-
-        if ( d->extra->rootNode )
-            d->dirtyAttributes |= QQuickItemPrivate::EffectReference;
-    }
-
-    // putting the nodes on the cleanup list of the window to be deleteted
-    // in the next cycle of the scene graph
-
-    QQuickWindowPrivate::get( window() )->cleanup( d->itemNodeInstance );
-
-    // now we can forget about the nodes
-
-    d->itemNodeInstance = nullptr;
-    d->paintNode = nullptr;
-
-    if ( d->extra.isAllocated() )
-    {
-        d->extra->opacityNode = nullptr;
-        d->extra->clipNode = nullptr;
-        d->extra->rootNode = nullptr;
-    }
-}
-
-void QskControl::onImplicitSizeChanged()
-{
-    if ( !QskResizable::sizeHint( Qt::PreferredSize ).isValid() )
-    {
-        // when we have no PreferredSize we fall back
-        // the constraint depends on the implicit size
-
-        layoutConstraintChanged();
-    }
 }
 
 QskControl* QskControl::owningControl() const
@@ -1150,85 +922,92 @@ QskControl* QskControl::owningControl() const
 
 QRectF QskControl::layoutRect() const
 {
-    return contentsRect();
+    Q_D( const QskControl );
+
+    if ( d->width <= 0.0 && d->height <= 0.0 )
+        return QRectF();
+
+    return layoutRectForSize( size() );
+}
+
+QRectF QskControl::layoutRectForSize( const QSizeF& size ) const
+{
+    const QRectF r( 0.0, 0.0, size.width(), size.height() );
+    return qskValidOrEmptyInnerRect( r, margins() );
 }
 
 QRectF QskControl::gestureRect() const
 {
-    return boundingRect();
+    return rect();
+}
+
+QRectF QskControl::focusIndicatorRect() const
+{
+    return contentsRect();
+}
+
+QRectF QskControl::focusIndicatorClipRect() const
+{
+    return clipRect();
 }
 
 void QskControl::updateLayout()
 {
 }
 
-void QskControl::updateImplicitSize()
+void QskControl::updateResources()
 {
-    m_blockedImplicitSize = false;
-
-    const auto m = margins();
-    const auto dw = m.left() + m.right();
-    const auto dh = m.top() + m.bottom();
-
-    const QSizeF hint = contentsSizeHint();
-
-    const auto w = ( hint.width() >= 0 ) ? dw + hint.width() : 0.0;
-    const auto h = ( hint.height() >= 0 ) ? dh + hint.height() : 0.0;
-
-    setupImplicitSizeConnections( false );
-    setImplicitSize( w, h );
-    setupImplicitSizeConnections( true );
 }
 
-QSizeF QskControl::contentsSizeHint() const
+QSizeF QskControl::contentsSizeHint(
+    Qt::SizeHint which, const QSizeF& constraint ) const
 {
-    qreal w = -1; // no hint
-    qreal h = -1;
+    return effectiveSkinlet()->sizeHint( this, which, constraint );
+}
 
-    if ( m_autoLayoutChildren )
+QSizeF QskControl::layoutSizeHint(
+    Qt::SizeHint which, const QSizeF& constraint ) const
+{
+    if ( which == Qt::MaximumSize || !d_func()->autoLayoutChildren )
+        return QSizeF();
+
+    qreal w = -1.0;
+    qreal h = -1.0;
+
+    const auto children = childItems();
+
+    for ( const auto child : children )
     {
-        for ( const auto child : childItems() )
-        {
-            if ( auto* control = qobject_cast< const QskControl* >( child ) )
-            {
-                if ( !QQuickItemPrivate::get( control )->isTransparentForPositioner() )
-                {
-                    const QSizeF hint = control->sizeHint();
+        if ( !qskIsVisibleToLayout( child ) )
+            continue;
 
-                    w = qMax( w, hint.width() );
-                    h = qMax( h, hint.height() );
-                }
-            }
+        const auto policy = qskSizePolicy( child );
+
+        if ( constraint.width() >= 0.0 && policy.isConstrained( Qt::Vertical ) )
+        {
+            const auto hint = qskSizeConstraint( child, which, constraint );
+            h = qMax( h, hint.height() );
+        }
+        else if ( constraint.height() >= 0.0 && policy.isConstrained( Qt::Horizontal ) )
+        {
+            const auto hint = qskSizeConstraint( child, which, constraint );
+            w = qMax( w, hint.width() );
+        }
+        else
+        {
+            const auto hint = qskSizeConstraint( child, which, QSizeF() );
+
+            w = qMax( w, hint.width() );
+            h = qMax( h, hint.height() );
         }
     }
 
     return QSizeF( w, h );
 }
 
-bool QskControl::isPolishScheduled() const
-{
-    Q_D( const QskControl );
-    return d->polishScheduled;
-}
-
-bool QskControl::isUpdateNodeScheduled() const
-{
-    Q_D( const QskControl );
-
-    return ( d->dirtyAttributes & QQuickItemPrivate::ContentUpdateMask )
-        && ( d->flags & QQuickItem::ItemHasContents );
-}
-
-bool QskControl::isInitiallyPainted() const
-{
-    return m_isInitiallyPainted;
-}
-
 QVector< QskAspect::Subcontrol > QskControl::subControls() const
 {
-    using namespace QskAspect;
-
-    QVector< Subcontrol > subControls;
+    QVector< QskAspect::Subcontrol > subControls;
 
     for ( auto mo = metaObject(); mo != nullptr; mo = mo->superClass() )
     {

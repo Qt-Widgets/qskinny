@@ -30,7 +30,7 @@ class QSK_EXPORT QskListView : public QskScrollView
 
     using Inherited = QskScrollView;
 
-public:
+  public:
     /*
         Everything, that can have a skin state, needs to be a QskSkinnable.
         Of course this is no option for the cells considering that we might
@@ -50,7 +50,7 @@ public:
     Q_ENUM( SelectionMode )
 
     QskListView( QQuickItem* parent = nullptr );
-    virtual ~QskListView();
+    ~QskListView() override;
 
     void setPreferredWidthFromColumns( bool );
     bool preferredWidthFromColumns() const;
@@ -79,12 +79,10 @@ public:
     virtual QskAspect::Subcontrol textSubControlAt( int row, int col ) const;
 #endif
 
-    virtual QSizeF contentsSizeHint() const override;
-
-public Q_SLOTS:
+  public Q_SLOTS:
     void setSelectedRow( int row );
 
-Q_SIGNALS:
+  Q_SIGNALS:
     void selectedRowChanged( int row );
 
     void selectionModeChanged();
@@ -92,18 +90,18 @@ Q_SIGNALS:
     void preferredWidthFromColumnsChanged();
     void textOptionsChanged();
 
-protected:
-    virtual void keyPressEvent( QKeyEvent* ) override;
-    virtual void keyReleaseEvent( QKeyEvent* ) override;
+  protected:
+    void keyPressEvent( QKeyEvent* ) override;
+    void keyReleaseEvent( QKeyEvent* ) override;
 
-    virtual void mousePressEvent( QMouseEvent* ) override;
-    virtual void mouseReleaseEvent( QMouseEvent* ) override;
+    void mousePressEvent( QMouseEvent* ) override;
+    void mouseReleaseEvent( QMouseEvent* ) override;
 
     void updateScrollableSize();
 
-    virtual void componentComplete() override;
+    void componentComplete() override;
 
-private:
+  private:
     class PrivateData;
     std::unique_ptr< PrivateData > m_data;
 };

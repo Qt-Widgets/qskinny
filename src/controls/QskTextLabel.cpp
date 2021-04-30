@@ -6,42 +6,71 @@
 #include "QskTextLabel.h"
 #include "QskAspect.h"
 #include "QskTextOptions.h"
-#include "QskSkinRenderer.h"
 
-#include <QFontMetricsF>
-#include <QtMath>
-
+QSK_SUBCONTROL( QskTextLabel, Panel )
 QSK_SUBCONTROL( QskTextLabel, Text )
 
 class QskTextLabel::PrivateData
 {
-public:
-    PrivateData( const QString& txt ):
-        effectiveTextFormat( QskTextOptions::AutoText ),
-        text( txt )
+  public:
+    PrivateData( const QString& txt )
+        : text( txt )
+        , hasPanel( false )
     {
+        effectiveTextFormat = textOptions.format();
     }
 
-    QskTextOptions textOptions;
+    inline QskTextOptions::TextFormat effectiveFormat() const
+    {
+        if ( textOptions.format() != QskTextOptions::AutoText )
+            return textOptions.format();
 
-    QskTextOptions::TextFormat effectiveTextFormat;
+        if ( effectiveTextFormat == QskTextOptions::AutoText )
+            effectiveTextFormat = textOptions.effectiveFormat( text );
+
+        return effectiveTextFormat;
+    }
+
     QString text;
+
+    QskTextOptions textOptions;
+    mutable QskTextOptions::TextFormat effectiveTextFormat;
+
+    bool hasPanel : 1;
 };
 
-QskTextLabel::QskTextLabel( QQuickItem* parent ):
-    QskTextLabel( QString(), parent )
+QskTextLabel::QskTextLabel( QQuickItem* parent )
+    : QskTextLabel( QString(), parent )
 {
 }
 
-QskTextLabel::QskTextLabel( const QString& text, QQuickItem* parent ):
-    Inherited( parent ),
-    m_data( new PrivateData( text ) )
+QskTextLabel::QskTextLabel( const QString& text, QQuickItem* parent )
+    : Inherited( parent )
+    , m_data( new PrivateData( text ) )
 {
-    setSizePolicy( QskSizePolicy::Minimum, QskSizePolicy::Fixed );
+    initSizePolicy( QskSizePolicy::Minimum, QskSizePolicy::Fixed );
 }
 
 QskTextLabel::~QskTextLabel()
 {
+}
+
+void QskTextLabel::setPanel( bool on )
+{
+    if ( on == m_data->hasPanel )
+        return;
+
+    m_data->hasPanel = on;
+
+    resetImplicitSize();
+    update();
+
+    Q_EMIT panelChanged( on );
+}
+
+bool QskTextLabel::hasPanel() const
+{
+    return m_data->hasPanel;
 }
 
 void QskTextLabel::setText( const QString& text )
@@ -50,7 +79,7 @@ void QskTextLabel::setText( const QString& text )
         return;
 
     m_data->text = text;
-    m_data->effectiveTextFormat = QskTextOptions::AutoText;
+    m_data->effectiveTextFormat = m_data->textOptions.format();
 
     resetImplicitSize();
     update();
@@ -68,9 +97,6 @@ void QskTextLabel::setTextOptions( const QskTextOptions& options )
     if ( options == m_data->textOptions )
         return;
 
-    if ( options.format() != m_data->textOptions.format() )
-        m_data->effectiveTextFormat = QskTextOptions::AutoText;
-
 #if 0
     // we are killing user settings of the policy this way ??
 
@@ -80,12 +106,13 @@ void QskTextLabel::setTextOptions( const QskTextOptions& options )
     setSizePolicy( policy, sizePolicy().verticalPolicy() );
 #endif
 
+    m_data->effectiveTextFormat = options.format();
     m_data->textOptions = options;
 
     resetImplicitSize();
     update();
 
-    Q_EMIT textOptionsChanged();
+    Q_EMIT textOptionsChanged( options );
 }
 
 QskTextOptions QskTextLabel::textOptions() const
@@ -93,105 +120,110 @@ QskTextOptions QskTextLabel::textOptions() const
     return m_data->textOptions;
 }
 
-Qt::Alignment QskTextLabel::alignment() const
+void QskTextLabel::setTextFormat( QskTextOptions::TextFormat format )
 {
-    return flagHint< Qt::Alignment >(
-        Text | QskAspect::Alignment, Qt::AlignLeft | Qt::AlignTop );
+    auto options = m_data->textOptions;
+    options.setFormat( format );
+
+    setTextOptions( options );
+}
+
+QskTextOptions::TextFormat QskTextLabel::textFormat() const
+{
+    return m_data->textOptions.format();
+}
+
+QskTextOptions::TextFormat QskTextLabel::effectiveTextFormat() const
+{
+    return m_data->effectiveFormat();
+}
+
+void QskTextLabel::setWrapMode( QskTextOptions::WrapMode wrapMode )
+{
+    auto options = m_data->textOptions;
+    options.setWrapMode( wrapMode );
+
+    setTextOptions( options );
+
+}
+
+QskTextOptions::WrapMode QskTextLabel::wrapMode() const
+{
+    return m_data->textOptions.wrapMode();
+}
+
+void QskTextLabel::setElideMode( Qt::TextElideMode elideMode )
+{
+    auto options = m_data->textOptions;
+    options.setElideMode( elideMode );
+
+    setTextOptions( options );
+}
+
+Qt::TextElideMode QskTextLabel::elideMode() const
+{
+    return m_data->textOptions.elideMode();
+}
+
+void QskTextLabel::setFontRole( int role )
+{
+    if ( setFontRoleHint( Text, role ) )
+        Q_EMIT fontRoleChanged( role );
+}
+
+void QskTextLabel::resetFontRole()
+{
+    if ( resetFontRoleHint( Text ) )
+        Q_EMIT fontRoleChanged( fontRoleHint( Text ) );
+}
+
+int QskTextLabel::fontRole() const
+{
+    return fontRoleHint( Text );
+}
+
+void QskTextLabel::setTextColor( const QColor& color )
+{
+    if ( setColor( Text, color ) )
+        Q_EMIT textColorChanged( color );
+}
+
+void QskTextLabel::resetTextColor()
+{
+    if ( resetColor( Text ) )
+        Q_EMIT textColorChanged( color( Text ) );
+}
+
+QColor QskTextLabel::textColor() const
+{
+    return color( Text );
 }
 
 void QskTextLabel::setAlignment( Qt::Alignment alignment )
 {
-    if ( alignment == this->alignment() )
-        return;
-
-    const auto subControl = effectiveSubcontrol( Text );
-    setFlagHint( subControl | QskAspect::Alignment, alignment );
-
-    if ( m_data->text.isEmpty() )
-        update();
-
-    Q_EMIT alignmentChanged();
+    if ( setAlignmentHint( Text, alignment ) )
+        Q_EMIT alignmentChanged( alignment );
 }
 
-QFont QskTextLabel::font() const 
+void QskTextLabel::resetAlignment()
+{
+    if ( resetAlignmentHint( Text ) )
+        Q_EMIT alignmentChanged( alignment() );
+}
+
+Qt::Alignment QskTextLabel::alignment() const
+{
+    return alignmentHint( Text, Qt::AlignLeft | Qt::AlignTop );
+}
+
+QFont QskTextLabel::font() const
 {
     return effectiveFont( QskTextLabel::Text );
 }
 
-bool QskTextLabel::isRichText() const
-{
-    if ( m_data->effectiveTextFormat == QskTextOptions::AutoText )
-    {
-        // caching the rich text evaluation
-        const bool isRichRext = m_data->textOptions.isRichText( m_data->text );
-        m_data->effectiveTextFormat = isRichRext ? QskTextOptions::RichText : QskTextOptions::PlainText;
-    }
-
-    return m_data->effectiveTextFormat;
-}
-
-QSizeF QskTextLabel::contentsSizeHint() const
-{
-    if ( !m_data->text.isEmpty() )
-    {
-        QskTextOptions options = textOptions();
-        options.setFormat( isRichText() ? QskTextOptions::RichText : QskTextOptions::PlainText );
-
-        return QskSkinRenderer::textSize(
-            this, m_data->text, options, QskTextLabel::Text );
-    }
-
-    return QSizeF( 0, 0 );
-}
-
-qreal QskTextLabel::heightForWidth( qreal width ) const
-{
-    const qreal lineHeight = QFontMetricsF( effectiveFont( Text ) ).height();
-
-    if ( m_data->text.isEmpty() ||
-        ( m_data->textOptions.wrapMode() == QskTextOptions::NoWrap ) )
-    {
-        return lineHeight;
-    }
-
-    qreal maxHeight = std::numeric_limits< qreal >::max();
-    if ( maxHeight / lineHeight > m_data->textOptions.maximumLineCount() )
-    {
-        // be careful with overflows
-        maxHeight = m_data->textOptions.maximumLineCount() * lineHeight;
-    }
-
-    QskTextOptions options = textOptions();
-    options.setFormat( isRichText() ? QskTextOptions::RichText : QskTextOptions::PlainText );
-
-    const QSizeF size = QskSkinRenderer::textSize( this,
-        QSizeF( width, maxHeight ), m_data->text, options, QskTextLabel::Text );
-
-    return qCeil( size.height() );
-}
-
-qreal QskTextLabel::widthForHeight( qreal height ) const
-{
-    if ( m_data->text.isEmpty() ||
-        ( m_data->textOptions.wrapMode() == QskTextOptions::NoWrap ) )
-    {
-        return Inherited::widthForHeight( height );
-    }
-
-    const qreal maxWidth = std::numeric_limits< qreal >::max();
-
-    QskTextOptions options = textOptions();
-    options.setFormat( isRichText() ? QskTextOptions::RichText : QskTextOptions::PlainText );
-
-    const QSizeF size = QskSkinRenderer::textSize( this, 
-        QSizeF( maxWidth, height ), m_data->text, options, QskTextLabel::Text );
-
-    return qCeil( size.width() );
-}
-
 void QskTextLabel::changeEvent( QEvent* event )
 {
-    switch( event->type() )
+    switch ( event->type() )
     {
         case QEvent::LocaleChange:
         {

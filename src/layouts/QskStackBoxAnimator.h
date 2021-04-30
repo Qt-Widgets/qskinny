@@ -6,21 +6,21 @@
 #ifndef QSK_STACK_BOX_ANIMATOR_H
 #define QSK_STACK_BOX_ANIMATOR_H
 
-#include "QskGlobal.h"
-#include "QskNamespace.h"
 #include "QskAnimator.h"
-#include <QObject>
+#include "QskNamespace.h"
+
+#include <qobject.h>
 
 class QskStackBox;
-class QskLayoutItem;
+class QQuickItem;
 
 class QSK_EXPORT QskStackBoxAnimator : public QObject, public QskAnimator
 {
     Q_OBJECT
 
-public:
-    QskStackBoxAnimator( QskStackBox* parent );
-    virtual ~QskStackBoxAnimator();
+  public:
+    QskStackBoxAnimator( QskStackBox* );
+    ~QskStackBoxAnimator() override;
 
     void setStartIndex( int index );
     void setEndIndex( int index );
@@ -28,12 +28,11 @@ public:
     int startIndex() const;
     int endIndex() const;
 
-protected:
+  protected:
     QskStackBox* stackBox() const;
-    QskLayoutItem* layoutItemAt( int index ) const;
-    void resizeItemAt( int index );
+    QQuickItem* itemAt( int index ) const;
 
-private:
+  private:
     int m_startIndex;
     int m_endIndex;
 };
@@ -42,23 +41,26 @@ class QSK_EXPORT QskStackBoxAnimator1 : public QskStackBoxAnimator
 {
     Q_OBJECT
 
-public:
-    QskStackBoxAnimator1( QskStackBox* parent );
-    virtual ~QskStackBoxAnimator1();
+  public:
+    QskStackBoxAnimator1( QskStackBox* );
+    ~QskStackBoxAnimator1() override;
 
     void setOrientation( Qt::Orientation );
     Qt::Orientation orientation() const;
 
-protected:
-    virtual void setup() override;
-    virtual void advance( qreal value ) override;
-    virtual void done() override;
+  protected:
+    bool eventFilter( QObject*, QEvent* ) override;
 
-private:
-    qreal m_itemOffset[2];
+    void setup() override;
+    void advance( qreal value ) override;
+    void done() override;
+
+  private:
+    qreal m_itemOffset[ 2 ];
 
     Qt::Orientation m_orientation : 2;
     Qsk::Direction m_direction : 4;
+    bool m_isDirty : 1;
     bool m_hasClip : 1;
 };
 
@@ -66,14 +68,14 @@ class QSK_EXPORT QskStackBoxAnimator3 : public QskStackBoxAnimator
 {
     Q_OBJECT
 
-public:
-    QskStackBoxAnimator3( QskStackBox* parent );
-    virtual ~QskStackBoxAnimator3();
+  public:
+    QskStackBoxAnimator3( QskStackBox* );
+    ~QskStackBoxAnimator3() override;
 
-protected:
-    virtual void setup() override;
-    virtual void advance( qreal value ) override;
-    virtual void done() override;
+  protected:
+    void setup() override;
+    void advance( qreal value ) override;
+    void done() override;
 };
 
 #endif

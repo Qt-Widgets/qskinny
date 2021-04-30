@@ -5,7 +5,9 @@
 
 #include "QskSimpleListBox.h"
 #include "QskAspect.h"
-#include <QFontMetricsF>
+#include "QskFunctions.h"
+
+#include <qfontmetrics.h>
 
 static inline qreal qskMaxWidth(
     const QFont& font, const QStringList& list )
@@ -15,7 +17,7 @@ static inline qreal qskMaxWidth(
     qreal max = 0.0;
     for ( int i = 0; i < list.size(); i++ )
     {
-        const qreal w = fm.width( list[i] );
+        const qreal w = qskHorizontalAdvance( fm, list[ i ] );
         if ( w > max )
             max = w;
     }
@@ -25,10 +27,10 @@ static inline qreal qskMaxWidth(
 
 class QskSimpleListBox::PrivateData
 {
-public:
-    PrivateData():
-        maxTextWidth( 0.0 ),
-        columnWidthHint( 0.0 )
+  public:
+    PrivateData()
+        : maxTextWidth( 0.0 )
+        , columnWidthHint( 0.0 )
     {
     }
 
@@ -39,12 +41,12 @@ public:
     QStringList entries;
 };
 
-QskSimpleListBox::QskSimpleListBox( QQuickItem* parent ):
-    Inherited( parent ),
-    m_data( new PrivateData() )
+QskSimpleListBox::QskSimpleListBox( QQuickItem* parent )
+    : Inherited( parent )
+    , m_data( new PrivateData() )
 {
     connect( this, &Inherited::selectedRowChanged,
-        this, [this]( int row ) { Q_EMIT selectedEntryChanged( entryAt( row ) ); } );
+        this, [ this ]( int row ) { Q_EMIT selectedEntryChanged( entryAt( row ) ); } );
 }
 
 QskSimpleListBox::~QskSimpleListBox()
@@ -54,15 +56,15 @@ QskSimpleListBox::~QskSimpleListBox()
 QString QskSimpleListBox::entryAt( int row ) const
 {
     if ( row >= 0 && row < m_data->entries.size() )
-        return m_data->entries[row];
+        return m_data->entries[ row ];
 
-    return QString::null;
+    return QString();
 }
 
 QVariant QskSimpleListBox::valueAt( int row, int col ) const
 {
     if ( col == 0 && row >= 0 && row < m_data->entries.size() )
-        return m_data->entries[row];
+        return m_data->entries[ row ];
 
     return QVariant();
 }
@@ -109,8 +111,7 @@ void QskSimpleListBox::insert( const QStringList& list, int index )
     {
         m_data->entries = list;
     }
-    else
-    if ( index < 0 || index >= m_data->entries.size() )
+    else if ( index < 0 || index >= m_data->entries.size() )
     {
         m_data->entries += list;
     }
@@ -118,7 +119,7 @@ void QskSimpleListBox::insert( const QStringList& list, int index )
     {
         // is there no better way ???
         for ( int i = 0; i < list.size(); i++ )
-            m_data->entries.insert( index + i, list[i] );
+            m_data->entries.insert( index + i, list[ i ] );
     }
 
     propagateEntries();
@@ -146,7 +147,7 @@ void QskSimpleListBox::insert( const QString& text, int index )
 {
     if ( m_data->columnWidthHint <= 0.0 )
     {
-        const auto w = QFontMetricsF( effectiveFont( Cell ) ).width( text );
+        const auto w = qskHorizontalAdvance( effectiveFont( Cell ), text );
         if ( w > m_data->maxTextWidth )
             m_data->maxTextWidth = w;
     }
@@ -168,9 +169,7 @@ void QskSimpleListBox::removeAt( int index )
 
     if ( m_data->columnWidthHint <= 0.0 )
     {
-        const QFontMetricsF fm( effectiveFont( Cell ) );
-        const auto w = fm.width( entries[index] );
-
+        const auto w = qskHorizontalAdvance( effectiveFont( Cell ), entries[ index ] );
         if ( w >= m_data->maxTextWidth )
             m_data->maxTextWidth = qskMaxWidth( effectiveFont( Text ), entries );
     }
@@ -219,13 +218,11 @@ void QskSimpleListBox::removeBulk( int from, int to )
         {
             row = -1;
         }
-        else
-        if ( row < from )
+        else if ( row < from )
         {
             // nothing to do
         }
-        else
-        if ( row <= to )
+        else if ( row <= to )
         {
             // we might end up here with the same row TODO ...
             row = qMin( from, m_data->entries.size() - 1 );
@@ -279,23 +276,19 @@ int QskSimpleListBox::columnCount() const
 
 qreal QskSimpleListBox::columnWidth( int col ) const
 {
-    using namespace QskAspect;
-
     if ( col >= columnCount() )
         return 0.0;
 
-    return m_data->maxTextWidth
-           + metric( Cell | Padding | LeftEdge )
-           + metric( Cell | Padding | RightEdge );
+    const auto padding = paddingHint( Cell );
+    return m_data->maxTextWidth + padding.left() + padding.right();
 }
 
 qreal QskSimpleListBox::rowHeight() const
 {
-    using namespace QskAspect;
+    const auto padding = paddingHint( Cell );
+    const QFontMetricsF fm( effectiveFont( Text ) );
 
-    return QFontMetrics( effectiveFont( Text ) ).height()
-           + metric( Cell | Padding | TopEdge )
-           + metric( Cell | Padding | BottomEdge );
+    return fm.height() + padding.top() + padding.bottom();
 }
 
 #include "moc_QskSimpleListBox.cpp"

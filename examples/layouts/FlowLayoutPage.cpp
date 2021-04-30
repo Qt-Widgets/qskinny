@@ -4,21 +4,21 @@
  *****************************************************************************/
 
 #include "FlowLayoutPage.h"
-#include "TestRectangle.h"
 #include "ButtonBox.h"
+#include "TestRectangle.h"
 
 #include <QskAspect.h>
-#include <QskTextLabel.h>
 #include <QskLinearBox.h>
 #include <QskRgbValue.h>
+#include <QskTextLabel.h>
 
 namespace
 {
     class Box : public QskLinearBox
     {
-    public:
-        Box( QQuickItem* parent = nullptr ):
-            QskLinearBox( Qt::Horizontal, 5, parent )
+      public:
+        Box( QQuickItem* parent = nullptr )
+            : QskLinearBox( Qt::Horizontal, 5, parent )
         {
             setObjectName( "Box" );
 
@@ -26,6 +26,8 @@ namespace
 
             setMargins( 10 );
             setSpacing( 5 );
+
+            setDefaultAlignment( Qt::AlignCenter );
 
             addRectangle( "LightSteelBlue" );
             addRectangle( "PowderBlue" );
@@ -53,7 +55,7 @@ namespace
         {
             const int index = 0;
 
-            QQuickItem* item = itemAtIndex( index );
+            auto item = itemAtIndex( index );
             removeAt( index );
 
             if ( item == nullptr )
@@ -72,31 +74,33 @@ namespace
             setDimension( dimension() + count );
         }
 
-    private:
+      private:
         void addRectangle( const char* colorName )
         {
-            TestRectangle* rect = new TestRectangle( colorName );
-            rect->setText( QString::number( itemCount() + 1 ) );
-            addItem( rect, Qt::AlignCenter );
+            auto rect = new TestRectangle( colorName );
+            rect->setText( QString::number( elementCount() + 1 ) );
+
+            addItem( rect );
         }
     };
 }
 
-FlowLayoutPage::FlowLayoutPage( QQuickItem* parent ):
-    QskLinearBox( Qt::Vertical, parent )
+FlowLayoutPage::FlowLayoutPage( QQuickItem* parent )
+    : QskLinearBox( Qt::Vertical, parent )
 {
     setMargins( 10 );
-    setBackgroundColor( QskRgbValue::LightSteelBlue );
+    setBackgroundColor( QskRgb::LightSteelBlue );
 
-    Box* box = new Box();
+    auto box = new Box();
 
-    ButtonBox* buttonBox = new ButtonBox();
-    buttonBox->addButton( "Flip", [ = ]() { box->transpose(); } );
-    buttonBox->addButton( "Mirror", [ = ]() { box->mirror(); } );
-    buttonBox->addButton( "Rotate", [ = ]() { box->rotate(); } );
-    buttonBox->addButton( "Dim+", [ = ]() { box->incrementDimension( +1 ); } );
-    buttonBox->addButton( "Dim-", [ = ]() { box->incrementDimension( -1 ); } );
+    auto buttonBox = new ButtonBox();
+    buttonBox->setLayoutAlignmentHint( Qt::AlignTop | Qt::AlignLeft );
+    buttonBox->addButton( "Flip", [ box ]() { box->transpose(); } );
+    buttonBox->addButton( "Mirror", [ box ]() { box->mirror(); } );
+    buttonBox->addButton( "Rotate", [ box ]() { box->rotate(); } );
+    buttonBox->addButton( "Dim+", [ box ]() { box->incrementDimension( +1 ); } );
+    buttonBox->addButton( "Dim-", [ box ]() { box->incrementDimension( -1 ); } );
 
-    addItem( buttonBox, Qt::AlignTop | Qt::AlignLeft );
+    addItem( buttonBox );
     addItem( box );
 }

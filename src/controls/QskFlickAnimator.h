@@ -6,14 +6,13 @@
 #ifndef QSK_FLICK_ANIMATOR_H
 #define QSK_FLICK_ANIMATOR_H 1
 
-#include "QskGlobal.h"
 #include "QskAnimator.h"
 
 class QSK_EXPORT QskFlickAnimator : public QskAnimator
 {
-public:
+  public:
     QskFlickAnimator();
-    virtual ~QskFlickAnimator();
+    ~QskFlickAnimator() override;
 
     void setAngle( qreal degrees );
     qreal angle() const;
@@ -26,15 +25,15 @@ public:
     void flick( qreal degrees, qreal velocity );
     void accelerate( qreal degrees, qreal velocity );
 
-protected:
-    virtual void setup() override;
-    virtual void advance( qreal value ) override final;
-    virtual void done() override;
+  protected:
+    void setup() override;
+    void advance( qreal value ) override final;
+    void done() override;
 
     virtual void translate( qreal dx, qreal dy ) = 0;
 
-private:
-    qreal m_velocity[2];
+  private:
+    qreal m_velocity[ 2 ];
 
     qreal m_degrees;
     qreal m_cos;
@@ -50,12 +49,12 @@ inline qreal QskFlickAnimator::angle() const
 
 inline qreal QskFlickAnimator::velocity() const
 {
-    return m_velocity[0];
+    return m_velocity[ 0 ];
 }
 
 inline qreal QskFlickAnimator::animatedVelocity() const
 {
-    return m_velocity[1];
+    return m_velocity[ 1 ];
 }
 
 #endif

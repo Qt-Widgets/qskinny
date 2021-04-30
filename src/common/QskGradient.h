@@ -7,11 +7,13 @@
 #define QSK_GRADIENT_H
 
 #include "QskGlobal.h"
-#include <QMetaType>
-#include <QColor>
-#include <QVector>
+
+#include <qcolor.h>
+#include <qmetatype.h>
+#include <qvector.h>
 
 class QDebug;
+class QVariant;
 
 class QSK_EXPORT QskGradientStop
 {
@@ -20,22 +22,29 @@ class QSK_EXPORT QskGradientStop
     Q_PROPERTY( qreal position READ position WRITE setPosition RESET resetPosition )
     Q_PROPERTY( QColor color READ color WRITE setColor RESET resetColor )
 
-public:
+  public:
     QskGradientStop();
     QskGradientStop( qreal position, const QColor& color );
 
     bool operator==( const QskGradientStop& ) const;
     bool operator!=( const QskGradientStop& ) const;
 
+    void setStop( qreal position, const QColor& color );
+
     qreal position() const;
     void setPosition( qreal position );
     void resetPosition();
 
-    QColor color() const;
+    const QColor& color() const;
     void setColor( const QColor& color );
     void resetColor();
 
-private:
+    static QColor interpolated(
+        const QskGradientStop&, const QskGradientStop&, qreal position );
+
+    uint hash( uint seed ) const;
+
+  private:
     qreal m_position;
     QColor m_color;
 };
@@ -47,7 +56,11 @@ class QSK_EXPORT QskGradient
     Q_PROPERTY( Orientation orientation READ orientation WRITE setOrientation )
     Q_PROPERTY( QVector< QskGradientStop > stops READ stops WRITE setStops )
 
-public:
+    Q_PROPERTY( bool valid READ isValid )
+    Q_PROPERTY( bool visible READ isVisible )
+    Q_PROPERTY( bool monochrome READ isMonochrome )
+
+  public:
     // TODO: radial/canonical gradients + other diagonal linear gradients
     enum Orientation
     {
@@ -59,16 +72,24 @@ public:
     Q_ENUM( Orientation )
 
     QskGradient();
+    QskGradient( Qt::GlobalColor );
+    QskGradient( QRgb );
     QskGradient( const QColor& );
+
+    QskGradient( Qt::Orientation, const QVector< QskGradientStop >& );
+    QskGradient( Qt::Orientation, const QColor&, const QColor& );
+
+    QskGradient( Orientation, const QVector< QskGradientStop >& );
     QskGradient( Orientation, const QColor&, const QColor& );
 
     ~QskGradient();
 
+    void setOrientation( Qt::Orientation );
     void setOrientation( Orientation );
     Orientation orientation() const;
 
     bool isValid() const;
-    void invalidate();
+    Q_INVOKABLE void invalidate();
 
     bool operator==( const QskGradient& ) const;
     bool operator!=( const QskGradient& ) const;
@@ -76,22 +97,84 @@ public:
     void setColor( const QColor& );
     void setColors( const QColor&, const QColor& );
 
-    void setStops( const QVector< QskGradientStop >& stops );
-    QVector< QskGradientStop > stops() const;
+    Q_INVOKABLE QColor startColor() const;
+    Q_INVOKABLE QColor endColor() const;
+
+    Q_INVOKABLE void setStops( const QVector< QskGradientStop >& );
+    Q_INVOKABLE QVector< QskGradientStop > stops() const;
+
+    Q_INVOKABLE bool hasStopAt( qreal value ) const;
+
+    void setAlpha( int alpha );
 
     bool isMonochrome() const;
     bool isVisible() const;
 
-private:
-    void setStopAt( int index, qreal stop );
-    qreal stopAt( int index ) const;
+    void reverse();
+    QskGradient reversed() const;
 
+    // all stops between [from, to] with positions streched into [0,1]
+    QskGradient extracted( qreal from, qreal start ) const;
+
+    QskGradient interpolated( const QskGradient&, qreal value ) const;
+
+    static QVariant interpolate( const QskGradient&,
+        const QskGradient&, qreal progress );
+
+    uint hash( uint seed ) const;
+
+    Q_INVOKABLE qreal stopAt( int index ) const;
+    Q_INVOKABLE QColor colorAt( int index ) const;
+    Q_INVOKABLE int stopCount() const;
+
+  private:
+    void setStopAt( int index, qreal stop );
     void setColorAt( int index, const QColor& color );
-    QColor colorAt( int index ) const;
 
     Orientation m_orientation;
     QVector< QskGradientStop > m_stops;
 };
+
+inline QskGradient::QskGradient( Qt::GlobalColor color )
+    : QskGradient( QColor( color ) )
+{
+}
+
+inline QskGradient::QskGradient( QRgb rgb )
+    : QskGradient( QColor::fromRgba( rgb ) )
+{
+}
+
+inline QColor QskGradient::startColor() const
+{
+    return ( m_stops.size() >= 2 ) ? m_stops.first().color() : QColor();
+}
+
+inline QColor QskGradient::endColor() const
+{
+    return ( m_stops.size() >= 2 ) ? m_stops.last().color() : QColor();
+}
+
+inline QskGradientStop::QskGradientStop()
+    : m_position( -1.0 )
+{
+}
+
+inline QskGradientStop::QskGradientStop( qreal position, const QColor& color )
+    : m_position( position )
+    , m_color( color )
+{
+}
+
+inline qreal QskGradientStop::position() const
+{
+    return m_position;
+}
+
+inline const QColor& QskGradientStop::color() const
+{
+    return m_color;
+}
 
 inline bool QskGradientStop::operator==( const QskGradientStop& other ) const
 {

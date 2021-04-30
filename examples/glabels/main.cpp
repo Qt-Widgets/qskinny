@@ -6,11 +6,11 @@
 #include <SkinnyShapeProvider.h>
 #include <SkinnyShortcut.h>
 
-#include <QskModule.h>
+#include <QskQml.h>
 #include <QskObjectCounter.h>
 
-#include <QQmlApplicationEngine>
 #include <QGuiApplication>
+#include <QQmlApplicationEngine>
 
 int main( int argc, char* argv[] )
 {
@@ -18,7 +18,7 @@ int main( int argc, char* argv[] )
     QskObjectCounter counter( true );
 #endif
 
-    QskModule::registerTypes();
+    QskQml::registerTypes();
     Qsk::addGraphicProvider( "shapes", new SkinnyShapeProvider() );
 
     QGuiApplication app( argc, argv );

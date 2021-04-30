@@ -1,6 +1,4 @@
-include( $${PWD}/../examples.pri )
-
-TARGET = buttons
+CONFIG += qskexample qskqmlexport
 
 RESOURCES += \
     buttons.qrc

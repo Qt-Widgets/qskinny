@@ -3,14 +3,14 @@
  * This file may be used under the terms of the QSkinny License, Version 1.0
  *****************************************************************************/
 
-#ifndef _FRAME_H
-#define _FRAME_H
+#ifndef FRAME_H
+#define FRAME_H
 
 #include "QskControl.h"
 
-class QskFrameNode;
+class QskBoxNode;
 
-class QSK_EXPORT Frame : public QskControl
+class Frame : public QskControl
 {
     Q_OBJECT
 
@@ -27,7 +27,7 @@ class QSK_EXPORT Frame : public QskControl
 
     using Inherited = QskControl;
 
-public:
+  public:
     enum Style
     {
         Plain,
@@ -38,7 +38,7 @@ public:
     Q_ENUM( Style )
 
     Frame( QQuickItem* parent = nullptr );
-    virtual ~Frame();
+    ~Frame() override;
 
     void setStyle( Style );
     Style style() const;
@@ -53,17 +53,17 @@ public:
     void setColor( const QColor& );
     QColor color() const;
 
-Q_SIGNALS:
+  Q_SIGNALS:
     void styleChanged();
     void frameWidthChanged();
     void radiusChanged();
     void colorChanged();
 
-protected:
-    virtual void updateNode( QSGNode* ) override;
+  protected:
+    void updateNode( QSGNode* ) override;
 
-private:
-    void updateFrameNode( const QRectF&, QskFrameNode* );
+  private:
+    void updateFrameNode( const QRectF&, QskBoxNode* );
 
     Style m_style;
     QColor m_color;

@@ -5,14 +5,16 @@
 
 #include "QskPushButton.h"
 #include "QskAspect.h"
+#include "QskBoxShapeMetrics.h"
 #include "QskCorner.h"
 #include "QskGraphic.h"
 #include "QskGraphicProvider.h"
-#include "QskTextOptions.h"
-#include "QskSkin.h"
 #include "QskSetup.h"
+#include "QskSkin.h"
+#include "QskSkinlet.h"
+#include "QskTextOptions.h"
 
-#include <QFontMetricsF>
+#include <qfontmetrics.h>
 
 QSK_SUBCONTROL( QskPushButton, Panel )
 QSK_SUBCONTROL( QskPushButton, Text )
@@ -20,12 +22,24 @@ QSK_SUBCONTROL( QskPushButton, Graphic )
 
 class QskPushButton::PrivateData
 {
-public:
-    PrivateData( const QString& txt ):
-        text( txt ),
-        isGraphicSourceDirty( false )
+  public:
+    PrivateData( const QString& txt )
+        : text( txt )
+        , graphicSourceSize( -1, -1 )
+        , isGraphicSourceDirty( false )
     {
         textOptions.setElideMode( Qt::ElideMiddle );
+    }
+
+    void ensureGraphic( const QskPushButton* button )
+    {
+        if ( isGraphicSourceDirty )
+        {
+            if ( !graphicSource.isEmpty() )
+                graphic = button->loadGraphic( graphicSource );
+
+            isGraphicSourceDirty = false;
+        }
     }
 
     QString text;
@@ -34,19 +48,21 @@ public:
     QUrl graphicSource;
     QskGraphic graphic;
 
+    QSizeF graphicSourceSize;
+
     bool isGraphicSourceDirty : 1;
 };
 
-QskPushButton::QskPushButton( QQuickItem* parent ):
-    QskPushButton( QString(), parent )
+QskPushButton::QskPushButton( QQuickItem* parent )
+    : QskPushButton( QString(), parent )
 {
 }
 
-QskPushButton::QskPushButton( const QString& text, QQuickItem* parent ):
-    Inherited( parent ),
-    m_data( new PrivateData( text ) )
+QskPushButton::QskPushButton( const QString& text, QQuickItem* parent )
+    : Inherited( parent )
+    , m_data( new PrivateData( text ) )
 {
-    setSizePolicy( QskSizePolicy::Minimum, QskSizePolicy::Fixed );
+    initSizePolicy( QskSizePolicy::Minimum, QskSizePolicy::Fixed );
 }
 
 QskPushButton::~QskPushButton()
@@ -55,29 +71,22 @@ QskPushButton::~QskPushButton()
 
 void QskPushButton::setCorner( const QskCorner& corner )
 {
-    const QskCorner oldCorner = this->corner();
-    if ( corner == oldCorner )
-        return;
-
-    using namespace QskAspect;
-    const Aspect aspect = Panel | AllCorners | Radius;
-
-    setMetric( aspect, corner.radius() );
-    setFlagHint( aspect | SizeMode, corner.mode() );
-
-    update();
-    Q_EMIT cornerChanged();
+    if ( setBoxShapeHint( Panel, corner.metrics() ) )
+        Q_EMIT cornerChanged();
 }
 
 QskCorner QskPushButton::corner() const
 {
-    using namespace QskAspect;
+    const auto shape = boxShapeHint( Panel );
 
-    const Aspect aspect = Panel | TopLeftCorner | RadiusX;
+#if 1
+    QskCorner corner;
+    corner.setRadius( shape.radius( Qt::TopLeftCorner ).width() );
+    corner.setSizeMode( shape.sizeMode() );
+    corner.setAspectRatioMode( shape.aspectRatioMode() );
+#endif
 
-    const auto mode = flagHint< Qt::SizeMode >( aspect | SizeMode, Qt::AbsoluteSize );
-
-    return QskCorner( mode, metric( aspect ) );
+    return corner;
 }
 
 void QskPushButton::setFlat( bool on )
@@ -135,6 +144,37 @@ QFont QskPushButton::font() const
     return effectiveFont( QskPushButton::Text );
 }
 
+void QskPushButton::resetGraphicSourceSize()
+{
+    setGraphicSourceSize( QSizeF( -1.0, -1.0 ) );
+}
+
+void QskPushButton::setGraphicSourceSize( const QSizeF& size )
+{
+    auto newSize = size;
+    if ( newSize.width() < 0.0 )
+        newSize.setWidth( -1.0 );
+
+    if ( newSize.height() < 0.0 )
+        newSize.setHeight( -1.0 );
+
+    if ( size != m_data->graphicSourceSize )
+    {
+        m_data->graphicSourceSize = size;
+
+        resetImplicitSize();
+        polish();
+        update();
+
+        Q_EMIT graphicSourceSizeChanged();
+    }
+}
+
+QSizeF QskPushButton::graphicSourceSize() const
+{
+    return m_data->graphicSourceSize;
+}
+
 void QskPushButton::setGraphicSource( const QUrl& url )
 {
     if ( m_data->graphicSource == url )
@@ -152,6 +192,11 @@ void QskPushButton::setGraphicSource( const QUrl& url )
     Q_EMIT graphicSourceChanged();
 }
 
+void QskPushButton::setGraphicSource( const QString& source )
+{
+    setGraphicSource( QUrl( source ) );
+}
+
 QUrl QskPushButton::graphicSource() const
 {
     return m_data->graphicSource;
@@ -165,7 +210,7 @@ void QskPushButton::setGraphic( const QskGraphic& graphic )
 
         if ( !m_data->graphicSource.isEmpty() )
         {
-            m_data->graphicSource = QString::null;
+            m_data->graphicSource = QString();
             m_data->isGraphicSourceDirty = false;
 
             Q_EMIT graphicSourceChanged();
@@ -181,6 +226,7 @@ void QskPushButton::setGraphic( const QskGraphic& graphic )
 
 QskGraphic QskPushButton::graphic() const
 {
+    m_data->ensureGraphic( this );
     return m_data->graphic;
 }
 
@@ -189,57 +235,24 @@ bool QskPushButton::hasGraphic() const
     return !( graphic().isEmpty() && graphicSource().isEmpty() );
 }
 
-void QskPushButton::updateLayout()
+void QskPushButton::updateResources()
 {
-    if ( m_data->isGraphicSourceDirty )
-    {
-        if ( !m_data->graphicSource.isEmpty() )
-        {
-            m_data->graphic = loadGraphic( m_data->graphicSource );
-            Q_EMIT graphicChanged();
-        }
-
-        m_data->isGraphicSourceDirty = false;
-    }
+    m_data->ensureGraphic( this );
 }
 
-QSizeF QskPushButton::contentsSizeHint() const
+QRectF QskPushButton::layoutRectForSize( const QSizeF& size ) const
 {
-    QSizeF size( 0, 0 );
-
-    if ( !m_data->text.isEmpty() )
-    {
-        // in elide mode we might want to ignore the text width ???
-
-        const QFontMetricsF fm( font() );
-        size += fm.size( Qt::TextShowMnemonic, m_data->text );
-    }
-
-    if ( !m_data->graphicSource.isEmpty() )
-    {
-        const double dim = 1.5 * size.height();
-        size.rheight() += 4 + dim;
-        const QSizeF graphicSize = m_data->graphic.defaultSize();
-        size.rwidth() += graphicSize.width() * dim / graphicSize.height();
-    }
-
-    const QSizeF minSize( metric( Panel | QskAspect::MinimumWidth ),
-        metric( Panel | QskAspect::MinimumHeight ) );
-
-    size = size.expandedTo( minSize );
-    size = outerBoxSize( Panel, size );
-
-    return size;
+    return subControlContentsRect( size, Panel );
 }
 
 void QskPushButton::changeEvent( QEvent* event )
 {
-    switch( event->type() )
+    switch ( event->type() )
     {
         case QEvent::StyleChange:
         {
-            if ( !m_data->graphicSource.isEmpty()
-                && qskSetup->skin()->hasGraphicProvider() )
+            if ( !m_data->graphicSource.isEmpty() &&
+                qskSetup->skin()->hasGraphicProvider() )
             {
                 // we might need to reload from a different skin
                 m_data->isGraphicSourceDirty = true;
@@ -261,18 +274,6 @@ void QskPushButton::changeEvent( QEvent* event )
     }
 
     Inherited::changeEvent( event );
-}
-
-void QskPushButton::hoverEnterEvent( QHoverEvent* event )
-{
-    Inherited::hoverEnterEvent( event );
-    Q_EMIT hovered( true );
-}
-
-void QskPushButton::hoverLeaveEvent( QHoverEvent* event )
-{
-    Inherited::hoverLeaveEvent( event );
-    Q_EMIT hovered( false );
 }
 
 QskGraphic QskPushButton::loadGraphic( const QUrl& url ) const

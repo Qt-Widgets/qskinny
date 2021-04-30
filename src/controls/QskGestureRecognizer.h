@@ -7,7 +7,8 @@
 #define QSK_GESTURE_RECOGNIZER_H
 
 #include "QskGlobal.h"
-#include <Qt>
+
+#include <qnamespace.h>
 #include <memory>
 
 class QQuickItem;
@@ -16,7 +17,7 @@ class QMouseEvent;
 
 class QSK_EXPORT QskGestureRecognizer
 {
-public:
+  public:
     enum State
     {
         Idle,
@@ -37,9 +38,10 @@ public:
     void setTimeout( int );
     int timeout() const;
 
+    // timestamp, when the Idle state had been left
     ulong timestamp() const;
 
-    bool processEvent( QQuickItem*, QEvent* );
+    bool processEvent( QQuickItem*, QEvent*, bool blockReplayedEvents = true );
 
     void reject();
     void accept();
@@ -47,14 +49,17 @@ public:
 
     State state() const;
 
-protected:
+    bool isReplaying() const;
+    bool hasProcessedBefore( const QMouseEvent* ) const;
+
+  protected:
     virtual void pressEvent( const QMouseEvent* );
     virtual void moveEvent( const QMouseEvent* );
     virtual void releaseEvent( const QMouseEvent* );
 
     virtual void stateChanged( State from, State to );
 
-private:
+  private:
     void setState( State );
     void reset();
 

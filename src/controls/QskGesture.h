@@ -8,14 +8,14 @@
 
 #include "QskGlobal.h"
 
-#include <QPointF>
-#include <QMetaType>
+#include <qmetatype.h>
+#include <qpoint.h>
 
 class QSK_EXPORT QskGesture
 {
     Q_GADGET
 
-public:
+  public:
     enum Type
     {
         NoType = -1,
@@ -51,7 +51,7 @@ public:
     void setState( State );
     inline State state() const { return m_state; }
 
-protected:
+  protected:
     QskGesture( Type type );
 
     const Type m_type;
@@ -62,14 +62,14 @@ class QSK_EXPORT QskTapGesture : public QskGesture
 {
     using Inherited = QskGesture;
 
-public:
+  public:
     QskTapGesture();
-    virtual ~QskTapGesture();
+    ~QskTapGesture() override;
 
     void setPosition( const QPointF& pos );
     inline QPointF position() const { return m_position; }
 
-private:
+  private:
     QPointF m_position;
 };
 
@@ -77,9 +77,9 @@ class QSK_EXPORT QskTapAndHoldGesture : public QskGesture
 {
     using Inherited = QskGesture;
 
-public:
+  public:
     QskTapAndHoldGesture();
-    virtual ~QskTapAndHoldGesture();
+    ~QskTapAndHoldGesture() override;
 
     void setPosition( const QPointF& pos );
     inline QPointF position() const { return m_position; }
@@ -87,18 +87,18 @@ public:
     void setTimeout( int msecs );
     inline int timeout() const { return m_timeout; }
 
-private:
+  private:
     QPointF m_position;
     int m_timeout;
 };
 
-class QskPanGesture : public QskGesture
+class QSK_EXPORT QskPanGesture : public QskGesture
 {
     using Inherited = QskGesture;
 
-public:
+  public:
     QskPanGesture();
-    virtual ~QskPanGesture();
+    ~QskPanGesture() override;
 
     void setVelocity( qreal );
     inline qreal velocity() const { return m_velocity; }
@@ -117,7 +117,7 @@ public:
 
     inline QPointF delta() const { return m_position - m_lastPosition; }
 
-private:
+  private:
     qreal m_angle;
     qreal m_velocity;
 
@@ -126,13 +126,13 @@ private:
     QPointF m_position;
 };
 
-class QskSwipeGesture : public QskGesture
+class QSK_EXPORT QskSwipeGesture : public QskGesture
 {
     using Inherited = QskGesture;
 
-public:
+  public:
     QskSwipeGesture();
-    virtual ~QskSwipeGesture();
+    ~QskSwipeGesture() override;
 
     void setVelocity( qreal velocity );
     inline qreal velocity() const { return m_velocity; }
@@ -140,7 +140,7 @@ public:
     void setAngle( qreal angle );
     inline qreal angle() const;
 
-private:
+  private:
     qreal m_velocity;
     qreal m_angle;
 };

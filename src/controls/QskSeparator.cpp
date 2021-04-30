@@ -8,19 +8,19 @@
 
 QSK_SUBCONTROL( QskSeparator, Panel )
 
-QskSeparator::QskSeparator( QQuickItem* parent ):
-    QskSeparator( Qt::Horizontal, parent )
+QskSeparator::QskSeparator( QQuickItem* parent )
+    : QskSeparator( Qt::Horizontal, parent )
 {
 }
 
-QskSeparator::QskSeparator( Qt::Orientation orientation, QQuickItem* parent ):
-    Inherited( parent ),
-    m_orientation( orientation )
+QskSeparator::QskSeparator( Qt::Orientation orientation, QQuickItem* parent )
+    : Inherited( parent )
+    , m_orientation( orientation )
 {
     if ( orientation == Qt::Horizontal )
-        setSizePolicy( QskSizePolicy::Minimum, QskSizePolicy::Fixed );
+        initSizePolicy( QskSizePolicy::Minimum, QskSizePolicy::Fixed );
     else
-        setSizePolicy( QskSizePolicy::Fixed, QskSizePolicy::Minimum );
+        initSizePolicy( QskSizePolicy::Fixed, QskSizePolicy::Minimum );
 }
 
 QskSeparator::~QskSeparator()
@@ -50,14 +50,29 @@ Qt::Orientation QskSeparator::orientation() const
     return m_orientation;
 }
 
-QSizeF QskSeparator::contentsSizeHint() const
+void QskSeparator::setExtent( qreal extent )
 {
-    const qreal m = metric( Panel );
+    if ( extent < 0.0 )
+        extent = 0.0;
 
-    if ( m_orientation == Qt::Horizontal )
-        return QSizeF( -1, m );
-    else
-        return QSizeF( m, -1 );
+    if ( setMetric( Panel | QskAspect::Size, extent ) )
+        Q_EMIT extentChanged( extent );
+}
+
+void QskSeparator::resetExtent()
+{
+    if ( resetMetric( Panel | QskAspect::Size ) )
+        Q_EMIT extentChanged( extent() );
+}
+
+qreal QskSeparator::extent() const
+{
+    return metric( Panel | QskAspect::Size );
+}
+
+QskAspect::Placement QskSeparator::effectivePlacement() const
+{
+    return static_cast< QskAspect::Placement >( m_orientation );
 }
 
 #include "moc_QskSeparator.cpp"

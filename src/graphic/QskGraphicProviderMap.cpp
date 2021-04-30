@@ -6,11 +6,9 @@
 #include "QskGraphicProviderMap.h"
 #include "QskGraphicProvider.h"
 
-#include <QString>
-#include <QHash>
-#include <QPointer>
-
-#include <QDebug>
+#include <qhash.h>
+#include <qpointer.h>
+#include <qstring.h>
 
 static inline QString qskKey( const QString& providerId )
 {
@@ -19,12 +17,12 @@ static inline QString qskKey( const QString& providerId )
 
 class QskGraphicProviderMap::PrivateData
 {
-public:
+  public:
     QHash< QString, QPointer< QskGraphicProvider > > hashTab;
 };
 
-QskGraphicProviderMap::QskGraphicProviderMap():
-    m_data( new PrivateData() )
+QskGraphicProviderMap::QskGraphicProviderMap()
+    : m_data( new PrivateData() )
 {
 }
 
@@ -50,7 +48,7 @@ void QskGraphicProviderMap::insert(
 void QskGraphicProviderMap::remove( const QString& providerId )
 {
     const auto it = m_data->hashTab.find( qskKey( providerId ) );
-    if ( it == m_data->hashTab.constEnd() )
+    if ( it == m_data->hashTab.end() )
         delete it.value();
 
     m_data->hashTab.erase( it );
@@ -61,7 +59,7 @@ QskGraphicProvider* QskGraphicProviderMap::take( const QString& providerId )
     QskGraphicProvider* provider = nullptr;
 
     const auto it = m_data->hashTab.find( qskKey( providerId ) );
-    if ( it == m_data->hashTab.constEnd() )
+    if ( it == m_data->hashTab.end() )
         provider = it.value();
 
     m_data->hashTab.erase( it );
@@ -72,7 +70,7 @@ QskGraphicProvider* QskGraphicProviderMap::take( const QString& providerId )
 QskGraphicProvider* QskGraphicProviderMap::provider( const QString& providerId ) const
 {
     const auto it = m_data->hashTab.find( qskKey( providerId ) );
-    if ( it == m_data->hashTab.constEnd() )
+    if ( it == m_data->hashTab.end() )
         return nullptr;
 
     if ( it.value().isNull() )

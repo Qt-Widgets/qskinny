@@ -7,34 +7,31 @@
 #define QSK_GRAPHIC_IMAGE_PROVIDER_H
 
 #include "QskGlobal.h"
-#include <QQuickImageProvider>
+#include <qquickimageprovider.h>
 
 class QskGraphic;
 
 class QSK_EXPORT QskGraphicImageProvider : public QQuickImageProvider
 {
-public:
+  public:
     QskGraphicImageProvider( const QString& providerId, ImageType );
-    virtual ~QskGraphicImageProvider();
+    ~QskGraphicImageProvider() override;
 
-    void setCacheSize( int );
-    int cacheSize() const;
-
-    virtual QImage requestImage( const QString& id,
+    QImage requestImage( const QString& id,
         QSize* size, const QSize& requestedSize ) override;
 
-    virtual QPixmap requestPixmap( const QString& id,
+    QPixmap requestPixmap( const QString& id,
         QSize* size, const QSize& requestedSize ) override;
 
-    virtual QQuickTextureFactory* requestTexture( const QString& id,
+    QQuickTextureFactory* requestTexture( const QString& id,
         QSize* size, const QSize& requestedSize ) override;
 
     QString graphicProviderId() const;
 
-protected:
+  protected:
     const QskGraphic* requestGraphic( const QString& id ) const;
-    QSize effectiveSize( const QSize& requestedSize, const QSizeF& defaultSize ) const;
 
+  private:
     const QString m_providerId;
 };
 

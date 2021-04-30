@@ -6,9 +6,8 @@
 #ifndef QSK_LIST_BOX_H
 #define QSK_LIST_BOX_H
 
-#include "QskGlobal.h"
 #include "QskListView.h"
-#include <QStringList>
+#include <qstringlist.h>
 
 class QSK_EXPORT QskSimpleListBox : public QskListView
 {
@@ -19,9 +18,9 @@ class QSK_EXPORT QskSimpleListBox : public QskListView
 
     using Inherited = QskListView;
 
-public:
+  public:
     QskSimpleListBox( QQuickItem* parent = nullptr );
-    virtual ~QskSimpleListBox();
+    ~QskSimpleListBox() override;
 
     void setColumnWidthHint( int column, qreal width );
     qreal columnWidthHint( int column ) const;
@@ -38,27 +37,27 @@ public:
     void removeAt( int index );
     void removeBulk( int from, int to = -1 );
 
-    virtual int rowCount() const override final;
-    virtual int columnCount() const override final;
+    int rowCount() const override final;
+    int columnCount() const override final;
 
-    virtual qreal columnWidth( int col ) const override;
-    virtual qreal rowHeight() const override;
+    qreal columnWidth( int col ) const override;
+    qreal rowHeight() const override;
 
     QString entryAt( int row ) const;
     QString selectedEntry() const;
     QStringList entries() const;
 
-    virtual QVariant valueAt( int row, int col ) const override final;
+    QVariant valueAt( int row, int col ) const override final;
 
-public Q_SLOTS:
+  public Q_SLOTS:
     void setEntries( const QStringList& );
     void clear();
 
-Q_SIGNALS:
+  Q_SIGNALS:
     void entriesChanged();
     void selectedEntryChanged( const QString& );
 
-private:
+  private:
     void propagateEntries();
 
     class PrivateData;

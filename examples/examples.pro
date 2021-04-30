@@ -1,31 +1,33 @@
-include( $${PWD}/../qskconfig.pri )
-
 TEMPLATE = subdirs
 
 # c++
 SUBDIRS += \
-    qvgviewer \
     desktop \
-    dialogbuttons \
+    gallery \
     layouts \
     listbox \
     messagebox \
-    sliders \
-    symbols \
+    mycontrols \
+    thumbnails \
     tabview
+
+lessThan(QT_MAJOR_VERSION, 6): SUBDIRS += iot-dashboard
+
+qtHaveModule(svg) {
+
+    # when checking in qvg files we could drop the svg dependency 
+
+    SUBDIRS += \
+        automotive \
+        qvgviewer
+}
 
 # qml
 SUBDIRS += \
+    boxes \
     buttons \
+    colorswitch \
     frames \
-    gallery \
     gbenchmark \
     glabels \
-    lineedit \
-    messageboxQml \
-    rectangles \
-    tlabels
-
-# non controls: qml
-SUBDIRS += \
-   images
+    messageboxQml

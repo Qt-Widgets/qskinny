@@ -6,57 +6,37 @@
 #ifndef QSK_PLAIN_TEXT_RENDERER_H
 #define QSK_PLAIN_TEXT_RENDERER_H
 
-#include "QskGlobal.h"
 #include "QskNamespace.h"
-#include "QskTextOptions.h"
+#include <qnamespace.h>
 
-#include <QFont>
-#include <QFontMetricsF>
+class QskTextColors;
+class QskTextOptions;
 
-class QSGNode;
+class QString;
+class QFont;
+class QRectF;
+class QSizeF;
 class QQuickItem;
 class QColor;
+class QSGTransformNode;
+class QSGNode;
 
-class QSK_EXPORT QskPlainTextRenderer
+namespace QskPlainTextRenderer
 {
-public:
-    QskPlainTextRenderer();
-    ~QskPlainTextRenderer();
+    QSK_EXPORT void updateNode(
+        const QString&, const QFont&, const QskTextOptions&,
+        Qsk::TextStyle, const QskTextColors&, Qt::Alignment, const QRectF&,
+        const QQuickItem*, QSGTransformNode* );
 
-    void setFont( const QFont& );
-    void setOptions( const QskTextOptions& );
-    void setAlignment( Qt::Alignment );
+    QSK_EXPORT void updateNodeColor(
+        QSGNode* parentNode, const QColor& textColor,
+        Qsk::TextStyle, const QColor& styleColor );
 
-    void updateNode(
-        const QQuickItem*, const QRectF&, const QString&, QSGNode* parentNode,
-        const QColor& textColor, Qsk::TextStyle, const QColor& styleColor );
+    QSK_EXPORT QSizeF textSize( const QString&,
+        const QFont&, const QskTextOptions& );
 
-    void updateNode(
-        const QQuickItem*, const QSizeF &size, const QString&, QSGNode* parentNode,
-        const QColor& textColor, Qsk::TextStyle, const QColor& styleColor );
-
-    static void updateNodeColor( QSGNode* parentNode,
-        const QColor& textColor, Qsk::TextStyle, const QColor& styleColor );
-
-    QSizeF implicitSizeHint( const QString& ) const;
-
-    QRectF textRect( const QSizeF&, const QString& ) const;
-
-private:
-    int flags() const;
-
-    QFont m_font;
-    QFontMetricsF m_fontMetrics;
-    QskTextOptions m_options;
-    Qt::Alignment m_alignment;
-};
-
-inline void QskPlainTextRenderer::updateNode(
-    const QQuickItem* item, const QSizeF& size, const QString& text, QSGNode* parentNode,
-    const QColor& textColor, Qsk::TextStyle style, const QColor& styleColor )
-{
-    updateNode( item, QRectF( QPointF(), size ),
-        text, parentNode, textColor, style, styleColor );
+    QSK_EXPORT QRectF textRect( const QString&,
+        const QFont&, const QskTextOptions&, const QSizeF& );
 }
 
 #endif

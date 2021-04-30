@@ -6,7 +6,6 @@
 #ifndef QSK_GRAPHIC_LABEL_H
 #define QSK_GRAPHIC_LABEL_H
 
-#include "QskGlobal.h"
 #include "QskControl.h"
 
 class QskGraphic;
@@ -17,20 +16,24 @@ class QSK_EXPORT QskGraphicLabel : public QskControl
     Q_OBJECT
 
     Q_PROPERTY( QUrl source READ source WRITE setSource NOTIFY sourceChanged )
+
     Q_PROPERTY( bool mirror READ mirror WRITE setMirror NOTIFY mirrorChanged )
 
     Q_PROPERTY( QSize sourceSize READ sourceSize
         WRITE setSourceSize RESET resetSourceSize NOTIFY sourceSizeChanged )
 
+    Q_PROPERTY( int graphicRole READ graphicRole
+        WRITE setGraphicRole RESET resetGraphicRole NOTIFY graphicRoleChanged )
+
     Q_PROPERTY( Qt::Alignment alignment READ alignment
-        WRITE setAlignment NOTIFY alignmentChanged )
+        WRITE setAlignment RESET resetAlignment NOTIFY alignmentChanged )
 
     Q_PROPERTY( FillMode fillMode READ fillMode
         WRITE setFillMode NOTIFY fillModeChanged )
 
     using Inherited = QskControl;
 
-public:
+  public:
     QSK_SUBCONTROLS( Graphic )
 
     enum FillMode
@@ -50,13 +53,14 @@ public:
 
     QskGraphicLabel( const QskGraphic&, QQuickItem* parent = nullptr );
 
-    virtual ~QskGraphicLabel();
+    ~QskGraphicLabel() override;
 
     QskGraphic graphic() const;
 
     virtual QskColorFilter graphicFilter() const;
 
     QUrl source() const;
+    void setSource( const QString& source );
     void setSource( const QUrl& url );
 
     void setSourceSize( const QSize& size );
@@ -68,34 +72,35 @@ public:
     bool mirror() const;
 
     void setAlignment( Qt::Alignment );
+    void resetAlignment();
     Qt::Alignment alignment() const;
 
     void setFillMode( FillMode );
     FillMode fillMode() const;
 
-    virtual qreal heightForWidth( qreal width ) const override;
-    virtual qreal widthForHeight( qreal height ) const override;
-
-    virtual QSizeF contentsSizeHint() const override;
-
     bool isEmpty() const;
 
-Q_SIGNALS:
+    void setGraphicRole( int role );
+    void resetGraphicRole();
+    int graphicRole() const;
+
+  Q_SIGNALS:
     void sourceChanged();
     void mirrorChanged();
     void sourceSizeChanged();
-    void alignmentChanged();
-    void fillModeChanged();
+    void graphicRoleChanged( int );
+    void alignmentChanged( Qt::Alignment );
+    void fillModeChanged( FillMode );
 
-public Q_SLOTS:
+  public Q_SLOTS:
     void setGraphic( const QskGraphic& );
 
-protected:
-    virtual void changeEvent( QEvent* ) override;
-    virtual void updateLayout() override;
+  protected:
+    void changeEvent( QEvent* ) override;
+    void updateResources() override;
     virtual QskGraphic loadSource( const QUrl& ) const;
 
-private:
+  private:
     class PrivateData;
     std::unique_ptr< PrivateData > m_data;
 };

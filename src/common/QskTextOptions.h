@@ -7,10 +7,11 @@
 #define QSK_TEXT_OPTIONS_H
 
 #include "QskGlobal.h"
-#include <QMetaType>
-#include <QTextOption>
 
-class QDebug;
+#include <qmetatype.h>
+#include <qtextoption.h>
+
+#include <limits>
 
 class QSK_EXPORT QskTextOptions
 {
@@ -22,9 +23,9 @@ class QSK_EXPORT QskTextOptions
     Q_PROPERTY( FontSizeMode fontSizeMode READ fontSizeMode WRITE setFontSizeMode )
     Q_PROPERTY( int maximumLineCount READ maximumLineCount WRITE setMaximumLineCount )
 
-public:
+  public:
     enum FontSizeMode
-    {   
+    {
         FixedSize,
         HorizontalFit,
         VerticalFit,
@@ -37,11 +38,8 @@ public:
         WordWrap = QTextOption::WordWrap,
         WrapAnywhere = QTextOption::WrapAnywhere,
         Wrap = QTextOption::WrapAtWordBoundaryOrAnywhere
-
     };
     Q_ENUM( WrapMode )
-
-    QskTextOptions();
 
     enum TextFormat
     {
@@ -52,29 +50,33 @@ public:
     };
     Q_ENUM( TextFormat )
 
-    TextFormat format() const;
-    void setFormat( TextFormat );
+    constexpr QskTextOptions() noexcept;
 
-    Qt::TextElideMode elideMode() const;
-    void setElideMode( Qt::TextElideMode );
+    constexpr TextFormat format() const noexcept;
+    void setFormat( TextFormat ) noexcept;
 
-    FontSizeMode fontSizeMode() const;
-    void setFontSizeMode( FontSizeMode );
+    TextFormat effectiveFormat( const QString& text ) const;
 
-    WrapMode wrapMode() const;
-    void setWrapMode( WrapMode );
+    constexpr Qt::TextElideMode elideMode() const noexcept;
+    void setElideMode( Qt::TextElideMode ) noexcept;
 
-    int maximumLineCount() const;
-    void setMaximumLineCount( int );
+    constexpr Qt::TextElideMode effectiveElideMode() const noexcept;
 
-    bool operator==( const QskTextOptions& other ) const;
-    bool operator!=( const QskTextOptions& other ) const;
+    constexpr FontSizeMode fontSizeMode() const noexcept;
+    void setFontSizeMode( FontSizeMode ) noexcept;
 
-    bool isRichText( const QString& text ) const;
+    constexpr WrapMode wrapMode() const noexcept;
+    void setWrapMode( WrapMode ) noexcept;
 
-    int textFlags() const;
+    constexpr int maximumLineCount() const noexcept;
+    void setMaximumLineCount( int ) noexcept;
 
-private:
+    constexpr bool operator==( const QskTextOptions& other ) const noexcept;
+    constexpr bool operator!=( const QskTextOptions& other ) const noexcept;
+
+    int textFlags() const noexcept;
+
+  private:
     int m_maximumLineCount;
     FontSizeMode m_fontSizeMode : 2;
     WrapMode m_wrapMode : 4;
@@ -82,14 +84,91 @@ private:
     Qt::TextElideMode m_elideMode : 2;
 };
 
-inline bool QskTextOptions::operator!=( const QskTextOptions& other ) const
+inline constexpr QskTextOptions::QskTextOptions() noexcept
+    : m_maximumLineCount( std::numeric_limits< int >::max() )
+    , m_fontSizeMode( QskTextOptions::FixedSize )
+    , m_wrapMode( QskTextOptions::NoWrap )
+    , m_format( PlainText ) // AutoText ???
+    , m_elideMode( Qt::ElideNone )
+{
+}
+
+inline void QskTextOptions::setFormat( TextFormat format ) noexcept
+{
+    m_format = format;
+}
+
+constexpr inline QskTextOptions::TextFormat QskTextOptions::format() const noexcept
+{
+    return m_format;
+}
+
+inline void QskTextOptions::setElideMode( Qt::TextElideMode elideMode ) noexcept
+{
+    m_elideMode = elideMode;
+}
+
+constexpr inline Qt::TextElideMode QskTextOptions::elideMode() const noexcept
+{
+    return m_elideMode;
+}
+
+constexpr inline Qt::TextElideMode QskTextOptions::effectiveElideMode() const noexcept
+{
+    return ( m_wrapMode != QskTextOptions::NoWrap ) ? Qt::ElideNone : m_elideMode;
+}
+
+inline void QskTextOptions::setWrapMode( WrapMode wrapMode ) noexcept
+{
+    m_wrapMode = wrapMode;
+}
+
+constexpr inline QskTextOptions::WrapMode QskTextOptions::wrapMode() const noexcept
+{
+    return m_wrapMode;
+}
+
+inline void QskTextOptions::setFontSizeMode( FontSizeMode fontSizeMode ) noexcept
+{
+    m_fontSizeMode = fontSizeMode;
+}
+
+constexpr inline QskTextOptions::FontSizeMode QskTextOptions::fontSizeMode() const noexcept
+{
+    return m_fontSizeMode;
+}
+
+inline void QskTextOptions::setMaximumLineCount( int lineCount ) noexcept
+{
+    m_maximumLineCount = lineCount;
+}
+
+constexpr inline int QskTextOptions::maximumLineCount() const noexcept
+{
+    return m_maximumLineCount;
+}
+
+inline constexpr bool QskTextOptions::operator==(
+    const QskTextOptions& other ) const noexcept
+{
+    return ( m_format == other.m_format ) &&
+           ( m_elideMode == other.m_elideMode ) &&
+           ( m_wrapMode == other.m_wrapMode ) &&
+           ( m_fontSizeMode == other.m_fontSizeMode ) &&
+           ( m_maximumLineCount == other.m_maximumLineCount );
+}
+
+inline constexpr bool QskTextOptions::operator!=(
+    const QskTextOptions& other ) const noexcept
 {
     return !( *this == other );
 }
 
-QSK_EXPORT uint qHash( const QskTextOptions &, uint seed = 0) noexcept;
+QSK_EXPORT uint qHash( const QskTextOptions&, uint seed = 0 ) noexcept;
 
 #ifndef QT_NO_DEBUG_STREAM
+class QDebug;
+
 QSK_EXPORT QDebug operator<<( QDebug, const QskTextOptions& );
 #endif
 

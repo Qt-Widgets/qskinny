@@ -1,43 +1,55 @@
-SQUIEK_ROOT = $${PWD}/..
-SQUIEK_OUT_ROOT = $${OUT_PWD}/..
-
-include( $${SQUIEK_ROOT}/qskconfig.pri )
-
 TEMPLATE = lib
-TARGET = skinnyinputcontext
+TARGET = $$qskPluginTarget(qskinputcontext)
 
-QT += quick gui-private
-CONFIG += no_private_qt_headers_warning
+QT += gui-private
 
-SQUIEK_DIRS = \
-    $${SQUIEK_ROOT}/src/common \
-    $${SQUIEK_ROOT}/src/nodes \
-    $${SQUIEK_ROOT}/src/graphic \
-    $${SQUIEK_ROOT}/src/controls \
-    $${SQUIEK_ROOT}/src/layouts \
-    $${SQUIEK_ROOT}/src/dialogs
+# CONFIG += pinyin
+# CONFIG += hunspell
 
-INCLUDEPATH *= $${SQUIEK_DIRS}
-DEPENDPATH  += $${SQUIEK_DIRS}
+CONFIG += plugin
+CONFIG += qskinny
 
-DESTDIR      = $${SQUIEK_OUT_ROOT}/examples/bin/platforminputcontexts
-
-QMAKE_RPATHDIR *= $${SQUIEK_OUT_ROOT}/lib
-LIBS *= -L$${SQUIEK_OUT_ROOT}/lib -lqskinny
-
-win32: contains(SQUIEK_CONFIG, SquiekDll): DEFINES += QT_DLL QSK_DLL SQUIEK_DLL
-
-SOURCES += \
-    QskInputContext.cpp \
-    QskInputContextPlugin.cpp \
-    QskInputCompositionModel.cpp \
-    QskPinyinCompositionModel.cpp \
-    pinyin/zh.cpp
+QSK_PLUGIN_SUBDIR = platforminputcontexts
+contains(QSK_CONFIG, QskDll): DEFINES += QSK_INPUTCONTEXT_MAKEDLL
 
 HEADERS += \
-    QskInputContext.h \
-    QskInputCompositionModel.h \
-    QskPinyinCompositionModel.h \
-    pinyin/zh.h
+    QskInputContextGlobal.h
 
-OTHER_FILES += metadata.json qml/ANSPInputPanel.qml
+SOURCES += \
+    QskInputContextPlugin.cpp
+
+OTHER_FILES += metadata.json
+
+pinyin {
+
+    unix {
+    
+        CONFIG += link_pkgconfig
+        PKGCONFIG += pinyin
+
+        HEADERS += \
+            QskPinyinTextPredictor.h
+
+        SOURCES += \
+            QskPinyinTextPredictor.cpp
+    }
+}
+
+hunspell {
+
+    unix {
+
+        CONFIG += link_pkgconfig
+        PKGCONFIG += hunspell
+
+        HEADERS += \
+            QskHunspellTextPredictor.h
+
+        SOURCES += \
+            QskHunspellTextPredictor.cpp
+    }
+
+}
+
+target.path    = $${QSK_INSTALL_PLUGINS}/$${QSK_PLUGIN_SUBDIR}
+INSTALLS       = target

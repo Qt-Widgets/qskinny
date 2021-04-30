@@ -4,8 +4,8 @@
  *****************************************************************************/
 
 #include "QskListView.h"
-#include "QskColorFilter.h"
 #include "QskAspect.h"
+#include "QskColorFilter.h"
 
 QSK_SUBCONTROL( QskListView, Cell )
 QSK_SUBCONTROL( QskListView, Text )
@@ -14,12 +14,12 @@ QSK_SUBCONTROL( QskListView, TextSelected )
 
 class QskListView::PrivateData
 {
-public:
-    PrivateData():
-        preferredWidthFromColumns( false ),
-        alternatingRowColors( false ),
-        selectionMode( QskListView::SingleSelection ),
-        selectedRow( -1 )
+  public:
+    PrivateData()
+        : preferredWidthFromColumns( false )
+        , alternatingRowColors( false )
+        , selectionMode( QskListView::SingleSelection )
+        , selectedRow( -1 )
     {
     }
 
@@ -31,11 +31,10 @@ public:
     int selectedRow;
 };
 
-QskListView::QskListView( QQuickItem* parent ):
-    QskScrollView( parent ),
-    m_data( new PrivateData() )
+QskListView::QskListView( QQuickItem* parent )
+    : QskScrollView( parent )
+    , m_data( new PrivateData() )
 {
-    setAcceptedMouseButtons( Qt::LeftButton );
 }
 
 QskListView::~QskListView()
@@ -49,7 +48,7 @@ void QskListView::setPreferredWidthFromColumns( bool on )
         m_data->preferredWidthFromColumns = on;
         resetImplicitSize();
 
-        Q_EMIT preferredWidthFromColumns();
+        Q_EMIT preferredWidthFromColumnsChanged();
     }
 }
 
@@ -74,7 +73,7 @@ bool QskListView::alternatingRowColors() const
     return m_data->alternatingRowColors;
 }
 
-void QskListView::setTextOptions(const QskTextOptions& textOptions )
+void QskListView::setTextOptions( const QskTextOptions& textOptions )
 {
     if ( textOptions != m_data->textOptions )
     {
@@ -154,24 +153,16 @@ QskAspect::Subcontrol QskListView::textSubControlAt( int row, int col ) const
     return ( row == selectedRow() ) ? TextSelected : Text;
 }
 
-QSizeF QskListView::contentsSizeHint() const
-{
-    qreal w = -1.0; // shouldn't we return something ???
-    if ( m_data->preferredWidthFromColumns )
-    {
-        w = scrollableSize().width();
-        w += metric( QskScrollView::VerticalScrollBar );
-    }
-
-    return QSizeF( w, -1.0 );
-}
-
 void QskListView::keyPressEvent( QKeyEvent* event )
 {
     if ( m_data->selectionMode == NoSelection )
+    {
+        Inherited::keyPressEvent( event );
         return;
+    }
 
     int row = selectedRow();
+
     switch ( event->key() )
     {
         case Qt::Key_Down:
@@ -204,12 +195,11 @@ void QskListView::keyPressEvent( QKeyEvent* event )
         case Qt::Key_PageDown:
         {
             // TODO ...
-            return QskScrollView::keyPressEvent( event );
-            break;
+            return Inherited::keyPressEvent( event );
         }
         default:
         {
-            return QskScrollView::keyPressEvent( event );
+            return Inherited::keyPressEvent( event );
         }
     }
 
@@ -221,10 +211,12 @@ void QskListView::keyPressEvent( QKeyEvent* event )
 
     if ( row != r )
     {
-        const int rowPos = row * rowHeight();
+        auto pos = scrollPos();
+
+        const qreal rowPos = row * rowHeight();
         if ( rowPos < scrollPos().y() )
         {
-            setScrollPos( QPointF( scrollPos().x(), rowPos ) );
+            pos.setY( rowPos );
         }
         else
         {
@@ -234,8 +226,16 @@ void QskListView::keyPressEvent( QKeyEvent* event )
             if ( rowPos + rowHeight() > scrolledBottom )
             {
                 const double y = rowPos + rowHeight() - vr.height();
-                setScrollPos( QPointF( scrollPos().x(), y ) );
+                pos.setY( y );
             }
+        }
+
+        if ( pos != scrollPos() )
+        {
+            if ( event->isAutoRepeat() )
+                setScrollPos( pos );
+            else
+                scrollTo( pos );
         }
     }
 }
@@ -247,8 +247,6 @@ void QskListView::keyReleaseEvent( QKeyEvent* event )
 
 void QskListView::mousePressEvent( QMouseEvent* event )
 {
-    forceActiveFocus( Qt::MouseFocusReason );
-
     if ( m_data->selectionMode != NoSelection )
     {
         const QRectF vr = viewContentsRect();
@@ -274,13 +272,13 @@ void QskListView::updateScrollableSize()
 {
     const double h = rowCount() * rowHeight();
 
-    double w = 0.0;
+    qreal w = 0.0;
     for ( int col = 0; col < columnCount(); col++ )
         w += columnWidth( col );
 
     const QSizeF sz = scrollableSize();
 
-    setScrollableSize( QSize( w, h ) );
+    setScrollableSize( QSizeF( w, h ) );
 
     if ( m_data->preferredWidthFromColumns &&
         sz.width() != scrollableSize().width() )

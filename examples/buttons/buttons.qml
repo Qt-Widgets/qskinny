@@ -12,6 +12,12 @@ Qsk.Window
     height: 600
     color: "Beige"
 
+    Qsk.Shortcut
+    {
+        sequence : "Ctrl+X"
+        onActivated: console.log( "Ctrl+X" )
+    }
+
     Qsk.LinearBox
     {
         orientation: Qt.Horizontal
@@ -95,11 +101,21 @@ Qsk.Window
 
         TestButton
         {
+            text: "Disabled"
+
+            flat: true
+            enabled: false
+        }
+
+
+        TestButton
+        {
             graphicSource: "image://shapes/Diamond/SandyBrown"
 
             corner
             {
-                mode: Qt.RelativeSize
+                sizeMode: Qt.RelativeSize
+                aspectRatioMode: Qt.IgnoreAspectRatio
                 radius: 100
             }
         }
@@ -110,7 +126,7 @@ Qsk.Window
 
             corner
             {
-                mode: Qt.AbsoluteSize
+                sizeMode: Qt.AbsoluteSize
                 radius: 0.0
             }
         }

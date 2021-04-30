@@ -7,16 +7,15 @@
 #define QSK_PAINTER_COMMAND_H
 
 #include "QskGlobal.h"
-#include <QPaintEngine>
-#include <QPixmap>
-#include <QImage>
-#include <QPainterPath>
 
-class QPainterPath;
+#include <qimage.h>
+#include <qpaintengine.h>
+#include <qpainterpath.h>
+#include <qpixmap.h>
 
 class QSK_EXPORT QskPainterCommand
 {
-public:
+  public:
     //! Type of the paint command
     enum Type
     {
@@ -62,22 +61,21 @@ public:
         QBrush brush;
         QPointF brushOrigin;
         QBrush backgroundBrush;
-        Qt::BGMode backgroundMode;
+        Qt::BGMode backgroundMode = Qt::TransparentMode;
         QFont font;
-        QMatrix matrix;
         QTransform transform;
 
-        Qt::ClipOperation clipOperation;
+        Qt::ClipOperation clipOperation = Qt::NoClip;
         QRegion clipRegion;
         QPainterPath clipPath;
-        bool isClipEnabled;
+        bool isClipEnabled = false;
 
         QPainter::RenderHints renderHints;
-        QPainter::CompositionMode compositionMode;
+        QPainter::CompositionMode compositionMode = QPainter::CompositionMode_SourceOver;
         qreal opacity;
     };
 
-    QskPainterCommand();
+    constexpr QskPainterCommand() noexcept;
     QskPainterCommand( const QskPainterCommand& );
 
     explicit QskPainterCommand( const QPainterPath& );
@@ -96,25 +94,24 @@ public:
 
     QskPainterCommand& operator=( const QskPainterCommand& );
 
-    bool operator==( const QskPainterCommand& other ) const;
-    bool operator!=( const QskPainterCommand& other ) const;
+    bool operator==( const QskPainterCommand& other ) const noexcept;
+    bool operator!=( const QskPainterCommand& other ) const noexcept;
 
+    Type type() const noexcept;
 
-    Type type() const;
+    QPainterPath* path() noexcept;
+    const QPainterPath* path() const noexcept;
 
-    QPainterPath* path();
-    const QPainterPath* path() const;
+    PixmapData* pixmapData() noexcept;
+    const PixmapData* pixmapData() const noexcept;
 
-    PixmapData* pixmapData();
-    const PixmapData* pixmapData() const;
+    ImageData* imageData() noexcept;
+    const ImageData* imageData() const noexcept;
 
-    ImageData* imageData();
-    const ImageData* imageData() const;
+    StateData* stateData() noexcept;
+    const StateData* stateData() const noexcept;
 
-    StateData* stateData();
-    const StateData* stateData() const;
-
-private:
+  private:
     void copy( const QskPainterCommand& );
     void reset();
 
@@ -129,40 +126,46 @@ private:
     };
 };
 
-inline bool QskPainterCommand::operator!=( const QskPainterCommand& other ) const
+constexpr inline QskPainterCommand::QskPainterCommand() noexcept
+    : m_type( Invalid )
+    , m_path( nullptr )
+{
+}
+
+inline bool QskPainterCommand::operator!=( const QskPainterCommand& other ) const noexcept
 {
     return !( *this == other );
 }
 
 //! \return Type of the command
-inline QskPainterCommand::Type QskPainterCommand::type() const
+inline QskPainterCommand::Type QskPainterCommand::type() const noexcept
 {
     return m_type;
 }
 
 //! \return Painter path to be painted
-inline const QPainterPath* QskPainterCommand::path() const
+inline const QPainterPath* QskPainterCommand::path() const noexcept
 {
     return m_path;
 }
 
 //! \return Attributes how to paint a QPixmap
 inline const QskPainterCommand::PixmapData*
-QskPainterCommand::pixmapData() const
+QskPainterCommand::pixmapData() const noexcept
 {
     return m_pixmapData;
 }
 
 //! \return Attributes how to paint a QImage
 inline const QskPainterCommand::ImageData*
-QskPainterCommand::imageData() const
+QskPainterCommand::imageData() const noexcept
 {
     return m_imageData;
 }
 
 //! \return Attributes of a state change
 inline const QskPainterCommand::StateData*
-QskPainterCommand::stateData() const
+QskPainterCommand::stateData() const noexcept
 {
     return m_stateData;
 }

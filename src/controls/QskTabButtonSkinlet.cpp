@@ -5,86 +5,73 @@
 
 #include "QskTabButtonSkinlet.h"
 #include "QskTabButton.h"
-#include "QskTextRenderer.h"
-#include "QskTabBar.h"
-#include "QskTabButton.h"
-#include "QskTextOptions.h"
 
-QskTabButtonSkinlet::QskTabButtonSkinlet( QskSkin* skin ):
-    Inherited( skin )
+#include "QskTextOptions.h"
+#include <qfontmetrics.h>
+
+QskTabButtonSkinlet::QskTabButtonSkinlet( QskSkin* skin )
+    : Inherited( skin )
 {
-    setNodeRoles( { ButtonRole, TextRole } );
+    setNodeRoles( { PanelRole, TextRole } );
 }
 
 QskTabButtonSkinlet::~QskTabButtonSkinlet() = default;
 
-QRectF QskTabButtonSkinlet::subControlRect(
-    const QskSkinnable* skinnable, QskAspect::Subcontrol subControl ) const
+QRectF QskTabButtonSkinlet::subControlRect( const QskSkinnable* skinnable,
+    const QRectF& contentsRect, QskAspect::Subcontrol subControl ) const
 {
-    auto tabButton = static_cast< const QskTabButton* >( skinnable );
-
     if ( subControl == QskTabButton::Text )
     {
-        return textRect( tabButton );
+        return skinnable->subControlContentsRect( contentsRect, QskTabButton::Panel );
     }
     else if ( subControl == QskTabButton::Panel )
     {
-        return panelRect( tabButton );
+        return contentsRect;
     }
 
-    return Inherited::subControlRect( skinnable, subControl );
+    return Inherited::subControlRect( skinnable, contentsRect, subControl );
 }
-
-QRectF QskTabButtonSkinlet::textRect( const QskTabButton* tabButton ) const
-{
-    QRectF rect = subControlRect( tabButton, QskTabButton::Panel );
-
-#if 1
-    // the margins might depend on the state ???
-    rect = tabButton->innerBox( QskTabButton::Panel, rect );
-#endif
-
-    return rect;
-}
-
-QRectF QskTabButtonSkinlet::panelRect( const QskTabButton* tabButton ) const
-{
-    return tabButton->contentsRect();
-}   
 
 QSGNode* QskTabButtonSkinlet::updateSubNode(
     const QskSkinnable* skinnable, quint8 nodeRole, QSGNode* node ) const
 {
     const auto tabButton = static_cast< const QskTabButton* >( skinnable );
 
-    switch( nodeRole )
+    switch ( nodeRole )
     {
-        case ButtonRole:
-            return updateButtonNode( tabButton, node );
+        case PanelRole:
+        {
+            return updateBoxNode( tabButton, node, QskTabButton::Panel );
+        }
 
         case TextRole:
-            return updateTextNode( tabButton, node );
-
-        default:
-            return nullptr;
+        {
+            return updateTextNode( tabButton, node, tabButton->text(),
+                tabButton->textOptions(), QskTabButton::Text );
+        }
     }
+
+    return Inherited::updateSubNode( skinnable, nodeRole, node );
 }
 
-QSGNode* QskTabButtonSkinlet::updateButtonNode(
-    const QskTabButton* tabButton, QSGNode* node ) const
+QSizeF QskTabButtonSkinlet::sizeHint( const QskSkinnable* skinnable,
+    Qt::SizeHint which, const QSizeF& ) const
 {
-    const auto tabBar = tabButton->tabBar();
-    const Qt::Orientation o = tabBar ? tabBar->orientation() : Qt::Horizontal;
+    if ( which != Qt::PreferredSize )
+        return QSizeF();
 
-    return updateBoxNode( tabButton, node, tabButton->contentsRect(),
-        QskTabButton::Panel, ( o == Qt::Vertical ) ? 1 : 0 );
-}
+    const auto tabButton = static_cast< const QskTabButton* >( skinnable );
 
-QSGNode* QskTabButtonSkinlet::updateTextNode(
-    const QskTabButton* tabButton, QSGNode* node ) const
-{
-    return QskSkinlet::updateTextNode( tabButton, node, tabButton->text(),
-        tabButton->textOptions(), QskTabButton::Text );
+    auto size = tabButton->strutSizeHint( QskTabButton::Panel );
+    const auto text = tabButton->text();
+
+    if ( !text.isEmpty() )
+    {
+        const QFontMetricsF fm( tabButton->effectiveFont( QskTabButton::Text ) );
+        size += fm.size( Qt::TextShowMnemonic, text );
+    }
+
+    return size;
 }
 
 #include "moc_QskTabButtonSkinlet.cpp"

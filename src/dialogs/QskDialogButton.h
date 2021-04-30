@@ -6,41 +6,40 @@
 #ifndef QSK_DIALOG_BUTTON_H
 #define QSK_DIALOG_BUTTON_H
 
-#include "QskGlobal.h"
-#include "QskPushButton.h"
 #include "QskDialog.h"
+#include "QskPushButton.h"
 
 class QSK_EXPORT QskDialogButton : public QskPushButton
 {
     Q_OBJECT
 
-    Q_PROPERTY( QskDialog::StandardButton standardButton READ standardButton()
-        WRITE setStandardButton NOTIFY standardButtonChanged() FINAL )
+    Q_PROPERTY( QskDialog::Action action READ action()
+        WRITE setAction NOTIFY actionChanged() FINAL )
 
     using Inherited = QskPushButton;
 
-public:
+  public:
     QSK_SUBCONTROLS( Panel, Text, Graphic )
 
-    QskDialogButton( QskDialog::StandardButton, QQuickItem* parent = nullptr );
+    QskDialogButton( QskDialog::Action, QQuickItem* parent = nullptr );
     QskDialogButton( QQuickItem* parent = nullptr );
 
-    virtual ~QskDialogButton();
+    ~QskDialogButton() override;
 
-    void setStandardButton( QskDialog::StandardButton );
-    QskDialog::StandardButton standardButton() const;
+    void setAction( QskDialog::Action );
+    QskDialog::Action action() const;
 
-    virtual QskAspect::Subcontrol effectiveSubcontrol(
+    QskAspect::Subcontrol effectiveSubcontrol(
         QskAspect::Subcontrol ) const override;
 
-Q_SIGNALS:
-    void standardButtonChanged();
+  Q_SIGNALS:
+    void actionChanged();
 
-protected:
-    virtual void changeEvent( QEvent* ) override;
+  protected:
+    void changeEvent( QEvent* ) override;
 
-private:
-    QskDialog::StandardButton m_buttonType;
+  private:
+    QskDialog::Action m_action;
 };
 
 #endif

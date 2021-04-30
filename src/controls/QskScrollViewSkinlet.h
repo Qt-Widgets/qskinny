@@ -6,7 +6,6 @@
 #ifndef QSK_SCROLL_VIEW_SKINLET_H
 #define QSK_SCROLL_VIEW_SKINLET_H
 
-#include "QskGlobal.h"
 #include "QskSkinlet.h"
 
 class QskScrollView;
@@ -17,7 +16,7 @@ class QSK_EXPORT QskScrollViewSkinlet : public QskSkinlet
 
     using Inherited = QskSkinlet;
 
-public:
+  public:
     enum NodeRole
     {
         ViewportRole,
@@ -31,25 +30,24 @@ public:
     };
 
     Q_INVOKABLE QskScrollViewSkinlet( QskSkin* = nullptr );
-    virtual ~QskScrollViewSkinlet();
+    ~QskScrollViewSkinlet() override;
 
-    virtual QRectF subControlRect(
-        const QskSkinnable*, QskAspect::Subcontrol ) const override;
+    QRectF subControlRect( const QskSkinnable*,
+        const QRectF&, QskAspect::Subcontrol ) const override;
 
-protected:
-    virtual QSGNode* updateSubNode( const QskSkinnable*,
+  protected:
+    QSGNode* updateSubNode( const QskSkinnable*,
         quint8 nodeRole, QSGNode* ) const override;
 
     virtual QSGNode* updateContentsNode( const QskScrollView*, QSGNode* ) const;
     QSGNode* contentsNode( const QskScrollView* );
 
-private:
-    QSGNode* updateViewportNode( const QskScrollView*, QSGNode* ) const;
+  private:
     QSGNode* updateContentsRootNode( const QskScrollView*, QSGNode* ) const;
 
-    QRectF viewportRect( const QskScrollView* ) const;
-    QRectF scrollBarRect( const QskScrollView*, Qt::Orientation ) const;
-    QRectF scrollHandleRect( const QskScrollView*, Qt::Orientation ) const;
+    QRectF viewportRect( const QskScrollView*, const QRectF& ) const;
+    QRectF scrollBarRect( const QskScrollView*, const QRectF&, Qt::Orientation ) const;
+    QRectF scrollHandleRect( const QskScrollView*, const QRectF&, Qt::Orientation ) const;
 };
 
 #endif

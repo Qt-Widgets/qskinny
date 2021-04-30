@@ -6,9 +6,8 @@
 #ifndef QSK_DIALOG_BUTTON_BOX_H
 #define QSK_DIALOG_BUTTON_BOX_H
 
-#include "QskGlobal.h"
-#include "QskDialog.h"
 #include "QskBox.h"
+#include "QskDialog.h"
 
 class QskPushButton;
 
@@ -24,13 +23,13 @@ class QSK_EXPORT QskDialogButtonBox : public QskBox
 
     using Inherited = QskBox;
 
-public:
+  public:
     QSK_SUBCONTROLS( Panel )
 
     QskDialogButtonBox( QQuickItem* parent = nullptr );
     QskDialogButtonBox( Qt::Orientation orientation, QQuickItem* parent = nullptr );
 
-    virtual ~QskDialogButtonBox();
+    ~QskDialogButtonBox() override;
 
     void setOrientation( Qt::Orientation );
     Qt::Orientation orientation() const;
@@ -38,34 +37,36 @@ public:
     void setCenteredButtons( bool center );
     bool centeredButtons() const;
 
-    void addButton( QskPushButton* button, QskDialog::ButtonRole role );
-    void addButton( QskDialog::StandardButton button );
-    void removeButton( QskPushButton* button );
+    void addButton( QskPushButton*, QskDialog::ActionRole );
+    void removeButton( QskPushButton* );
     void clear();
 
-    QList< QskPushButton* > buttons() const;
-    QskDialog::ButtonRole buttonRole( const QskPushButton* ) const;
+    QVector< QskPushButton* > buttons() const;
+    QVector< QskPushButton* > buttons( QskDialog::ActionRole ) const;
 
-    void setStandardButtons( QskDialog::StandardButtons buttons );
-    QskDialog::StandardButtons standardButtons() const;
-    QskDialog::StandardButton standardButton( const QskPushButton* ) const;
+    QskDialog::ActionRole actionRole( const QskPushButton* ) const;
 
-    QskDialog::StandardButton defaultButtonCandidate() const;
+    void addAction( QskDialog::Action );
 
-    QskPushButton* button( QskDialog::StandardButton ) const;
-    QskPushButton* buttonFromRole( QskDialog::ButtonRole ) const;
+    void setActions( QskDialog::Actions );
+    QskDialog::Actions actions() const;
 
-    QskDialog::StandardButton clickedButton() const;
+    QskDialog::Action action( const QskPushButton* ) const;
 
-    virtual QSizeF contentsSizeHint() const override;
+    QskPushButton* button( QskDialog::Action ) const;
 
-    virtual QskAspect::Subcontrol effectiveSubcontrol(
+    QskDialog::Action clickedAction() const;
+
+    QskAspect::Subcontrol effectiveSubcontrol(
         QskAspect::Subcontrol ) const override;
 
-    static bool isDefaultButtonKeyEvent( const QKeyEvent* );
-    static QString buttonText( QskDialog::StandardButton );
+    void setDefaultButton( QskPushButton* );
+    QskPushButton* defaultButton() const;
 
-Q_SIGNALS:
+    static bool isDefaultButtonKeyEvent( const QKeyEvent* );
+    static QString buttonText( QskDialog::Action );
+
+  Q_SIGNALS:
     void clicked( QskPushButton* button );
     void accepted();
     void rejected();
@@ -73,18 +74,17 @@ Q_SIGNALS:
     void centeredButtonsChanged();
     void orientationChanged();
 
-protected:
-    virtual bool event( QEvent* event ) override;
-    virtual void updateLayout() override;
+  protected:
+    bool event( QEvent* event ) override;
 
-    virtual QskPushButton* createButton( QskDialog::StandardButton ) const;
+    void updateLayout() override;
+    QSizeF layoutSizeHint( Qt::SizeHint, const QSizeF& ) const override;
 
+    virtual QskPushButton* createButton( QskDialog::Action ) const;
     void invalidateLayout();
 
-private Q_SLOTS:
+  private:
     void onButtonClicked();
-
-private:
     void rearrangeButtons();
 
     class PrivateData;
